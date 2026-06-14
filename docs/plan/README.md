@@ -1,38 +1,54 @@
 # Plan — atomic PR artifacts
 
-The [PRD](../prd.md) and [TDD](../tdd.md) decomposed as far as it goes: each file below is **one shippable PR** with objective acceptance criteria. Build in dependency order. Each artifact follows [`TEMPLATE.md`](TEMPLATE.md).
+The [PRD](../prd.md) and [TDD](../tdd.md) decomposed into **shippable PRs**, each with objective acceptance criteria. Build in dependency order. Format: [`TEMPLATE.md`](TEMPLATE.md).
 
-## Roadmap (dependency order)
+Strategy: **prove the core dopamine loop before adding content.** Phases 1–2 deliver a *playable, addictive feel*; phases 3–4 add the full vision (10 bosses, base, dungeons, juice).
 
-| PR | Title | Depends on | Ships |
-|----|-------|-----------|-------|
-| [000](PR-000-scaffold.md) | Project scaffold | — | pnpm + TS + Ink boot to a "Hello" screen |
-| [001](PR-001-app-shell-state-machine.md) | App shell + state machine | 000 | store, reducer, screen router |
-| [002](PR-002-title-screen.md) | Title screen | 001 | animated title + New Game/Quit menu |
-| [003](PR-003-data-model-and-content.md) | Data model + class content | 001 | types + 3 classes |
-| [004](PR-004-character-creation.md) | Character creation | 002, 003 | pick class → hero in state |
-| [005](PR-005-combat-engine.md) | Combat engine (pure) | 003 | tested turn/damage/win-lose logic |
-| [006](PR-006-battle-screen.md) | Battle screen UI | 004, 005 | a playable battle to win/lose |
-| [007](PR-007-animation-system.md) | Animation system | 006 | attack frames + HP-bar tween |
-| [008](PR-008-enemies-and-encounters.md) | Enemies + encounters | 005 | 3 enemies + 1 boss |
-| [009](PR-009-exploration-map.md) | Exploration map | 004, 006, 008 | traverse 4 scenes, trigger fights |
-| [010](PR-010-inventory-and-items.md) | Inventory + items | 006 | potions usable in/out of battle |
-| [011](PR-011-end-screens-and-loop.md) | End screens + loop | 009, 010 | victory/defeat/game-over → restart |
+## Phase 1 — Engine & rendering foundation
+| PR | Title | Depends on |
+|----|-------|-----------|
+| [000](PR-000-scaffold.md) | Project scaffold (TS + terminal-kit + rot.js) | — |
+| [001](PR-001-tile-render.md) | Tile renderer (ScreenBuffer) | 000 |
+| [002](PR-002-game-loop.md) | Fixed-timestep game loop | 001 |
+| [003](PR-003-movement-camera.md) | Player movement + following camera | 002 |
+| [004](PR-004-procedural-world.md) | Procedural world gen + collision | 003 |
 
-## Dependency graph
+## Phase 2 — Core combat loop (the dopamine core)
+| PR | Title | Depends on |
+|----|-------|-----------|
+| [005](PR-005-chasing-enemies.md) | Enemies that hunt you on a clock | 004 |
+| [006](PR-006-combat-engine.md) | Combat engine: radius + stamina + hit-chance (pure, tested) | 005 |
+| [007](PR-007-attack-types-stamina.md) | 1–3 named attack types (risk/reward) wired to input | 006 |
+| [008](PR-008-hud.md) | HUD: health / stamina / level | 007 |
+| [009](PR-009-leveling-progression.md) | Leveling + power curve (pure, tested) | 006 |
+
+**◆ MVP cut line** — after PR-009 (+ a starting weapon from 010) the core loop is playable and *feels* like the game.
+
+## Phase 3 — Progression & content
+| PR | Title | Depends on |
+|----|-------|-----------|
+| [010](PR-010-weapons.md) | Weapons: slot, random drops, equip, damage | 006, 009 |
+| [011](PR-011-bosses.md) | Bosses (1 first, design for 10) + win condition | 007, 009 |
+| [012](PR-012-save-load.md) | Save / autosave (resume where you were) | 004, 009 |
+| [013](PR-013-growing-base.md) | Growing home base (persistent meta) | 012 |
+
+## Phase 4 — Depth & polish (stretch)
+| PR | Title | Depends on |
+|----|-------|-----------|
+| [014](PR-014-dungeons.md) | High-risk/high-reward dungeons | 011 |
+| [015](PR-015-juice-game-feel.md) | Juice: hit flashes, damage numbers, screen shake | 008 |
+
+## Dependency graph (spine)
 ```
-000 ─ 001 ─┬─ 002 ─┐
-           │       ├─ 004 ─┬─ 006 ─┬─ 007
-           ├─ 003 ─┤       │       ├─ 010 ─┐
-           │       └─ 005 ─┴───────┘       │
-           │       005 ─ 008 ─┐            │
-           │                  └─ 009 ──────┴─ 011
+000─001─002─003─004─005─006─┬─007─┬─008────────────┐
+                            │     └─011             ├─015
+                            ├─009─┴─010             │
+                            └─(004,009)─012─013     │
+                                         011─014────┘
 ```
-
-## MVP cut line
-PRs **000–011** complete the PRD's MVP (F1–F8). Stretch items (save/load, more content, status effects, npm publish) become PR-012+ once MVP is green.
 
 ## Conventions
 - One PR = one artifact = one branch (`pr-000-scaffold`) = one merge.
 - A PR is **ready** only when its Acceptance boxes are objectively checkable.
-- Update the PR's `Status` as it moves: `ready → in progress → merged`.
+- Keep the **simulation pure** and the **renderer read-only** — never let game math leak into render/input. This is the bet that keeps the whole thing testable and lets us add juice safely later.
+- Update each artifact's `Status` (`ready → in progress → merged`) as it moves.

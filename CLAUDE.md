@@ -1,31 +1,39 @@
 # CLAUDE.md — Terminal Quest
 
-A turn-based fantasy micro-RPG in the terminal (animated ASCII combat). This project is also a deliberate practice of discovery-first, planning-artifact-driven development.
+A real-time terminal action-roguelike with Solo-Leveling power progression (Vampire Survivors × Solo Leveling, in a terminal). Also a deliberate practice of discovery-first, planning-artifact-driven development.
 
 ## Read these first
-- `docs/prd.md` — what & why
-- `docs/tdd.md` — stack, architecture, key decisions
-- `docs/plan/README.md` — the roadmap + atomic per-PR artifacts (build in dependency order)
+- `docs/prd.md` — what & why; **§2 is the real spec** (the "impossible → trivial" power delta we're chasing)
+- `docs/tdd.md` — stack + the pure-sim ⟂ render ⟂ input architecture
+- `docs/plan/README.md` — phased roadmap + atomic per-PR artifacts (build in dependency order)
 
 ## Stack
-TypeScript (strict) · Ink (React for terminal) · vitest · pnpm · Node ≥ 18.
+TypeScript (strict) · **terminal-kit** (ScreenBuffer rendering + input) · **rot.js** (procedural gen, seeded RNG, FOV, pathfinding) · vitest · pnpm · Node ≥ 18.
 
 ## Commands (once PR-000 lands)
-- `pnpm dev` — run the game (tsx watch)
-- `pnpm test` — vitest (engine)
+- `pnpm dev` — run the game (tsx)
+- `pnpm test` — vitest (pure sim/combat/progression)
 - `pnpm typecheck` — tsc --noEmit
 - `pnpm build` — compile to dist/
 
-## How we work here
-- **One PR = one artifact in `docs/plan/` = one branch = one merge.** Branch names: `pr-000-scaffold`, etc.
-- Don't start a PR until its Acceptance boxes are objectively checkable. Update the artifact's `Status` (`ready → in progress → merged`) as you go.
-- Keep the **engine pure** (`src/engine/`, no React, injectable RNG) and **screens dumb** (no game math). This separation is the core architectural bet — preserve it.
-- Content lives as typed data in `src/data/`; abilities/items are data-driven effects so the engine stays generic.
+## The architecture bet (do not violate)
+Three isolated layers:
+1. **Simulation** (`src/game/`) — pure `update(state, intents, dt, rng) → state`. No I/O, no drawing. Deterministic via injected seeded RNG.
+2. **Render** (`src/render/`) — reads state, draws to ScreenBuffer. **Read-only**, never mutates state.
+3. **Input** (`src/input/`) — keypress → intents.
 
-## Conventions / gotchas
-- `jsx: react-jsx` (no `import React` needed).
-- Always clear animation timers on unmount.
-- Commit `pnpm-lock.yaml`.
+Keep combat/progression math in pure, tested modules (`combat.ts`, `progression.ts`). Never let game math leak into render/input. This is what keeps it testable and lets us add juice (PR-015) safely.
+
+## How we work here
+- **One PR = one artifact in `docs/plan/` = one branch (`pr-000-scaffold`) = one merge.**
+- Don't start a PR until its Acceptance boxes are objectively checkable. Update its `Status` (`ready → in progress → merged`).
+- **Phases matter:** prove the core dopamine loop (Phases 1–2) *before* adding content (Phases 3–4).
+- Balance knobs live in `config.ts` — tune by playing.
+
+## Gotchas
+- Real-time + terminal: cap fps (~12–15), use ScreenBuffer **delta** draws (no full clears) to avoid flicker.
+- **Always restore the terminal on exit** (incl. crashes) — handle SIGINT/exit. A broken terminal is a failed run.
+- Save the **world seed**, not the tile array (world is deterministic from seed).
 
 ## Current status
-Planning complete (PRD + TDD + PR-000…011). No code yet — **next step is implementing PR-000 (scaffold).**
+Planning complete (PRD + TDD + PR-000…015 across 4 phases). No code yet — **next step is implementing PR-000 (scaffold).**
