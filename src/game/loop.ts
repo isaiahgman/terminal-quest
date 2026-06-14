@@ -38,7 +38,7 @@ export function runLoop(initial: GameState, hooks: LoopHooks): void {
 
     let advanced = false;
     while (acc >= SIM_DT) {
-      state = update(state, hooks.drainIntents(), SIM_DT);
+      state = update(state, hooks.drainIntents());
       acc -= SIM_DT;
       advanced = true;
     }

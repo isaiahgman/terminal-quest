@@ -20,23 +20,23 @@ function makeState(): GameState {
 
 describe('update', () => {
   it('moves the player onto a floor tile', () => {
-    const next = update(makeState(), [{ type: 'move', dx: 1, dy: 0 }], 0);
+    const next = update(makeState(), [{ type: 'move', dx: 1, dy: 0 }]);
     expect(next.player.pos).toEqual({ x: 2, y: 1 });
   });
 
   it('blocks movement into a wall', () => {
     // up-left from center lands on the (0,0) corner wall → blocked
-    const next = update(makeState(), [{ type: 'move', dx: -1, dy: -1 }], 0);
+    const next = update(makeState(), [{ type: 'move', dx: -1, dy: -1 }]);
     expect(next.player.pos).toEqual({ x: 1, y: 1 });
   });
 
   it('increments the tick every call', () => {
-    expect(update(makeState(), [], 0).tick).toBe(1);
+    expect(update(makeState(), []).tick).toBe(1);
   });
 
   it('is pure — does not mutate the input state', () => {
     const before = makeState();
-    update(before, [{ type: 'move', dx: 1, dy: 0 }], 0);
+    update(before, [{ type: 'move', dx: 1, dy: 0 }]);
     expect(before.player.pos).toEqual({ x: 1, y: 1 });
     expect(before.tick).toBe(0);
   });
