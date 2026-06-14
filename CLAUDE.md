@@ -24,9 +24,31 @@ Three isolated layers:
 
 Keep combat/progression math in pure, tested modules (`combat.ts`, `progression.ts`). Never let game math leak into render/input. This is what keeps it testable and lets us add juice (PR-015) safely.
 
-## How we work here
-- **One PR = one artifact in `docs/plan/` = one branch (`pr-000-scaffold`) = one merge.**
-- Don't start a PR until its Acceptance boxes are objectively checkable. Update its `Status` (`ready → in progress → merged`).
+## Execution workflow (how a ticket gets built)
+**Never push to `main`.** All work goes through branches + PRs. To pick up a ticket (e.g. PR-005):
+1. **Branch + worktree** — `git worktree add ../terminal-quest-pr-005 -b pr-005-<slug>` and work there (isolated from main).
+2. **Pick the planning artifact** — `docs/plan/PR-005-*.md`.
+3. **Breakdown / context-collection stage** — before coding: read the artifact + its `Depends on` PRs + the PRD/TDD sections it links + the existing code it touches. Restate the goal, list files to change, confirm the Acceptance boxes are objectively checkable, surface unknowns.
+4. **Implement** to the acceptance criteria; run `pnpm typecheck` + `pnpm test`.
+5. **Commit** on the branch (co-author trailer) and push the **branch** (never `main`).
+6. **Open a PR** via the GitHub MCP. PR body format is exactly:
+   ```
+   ## Summary
+   <what & why, 1–3 sentences; link the planning artifact>
+   ## Changes
+   - <change 1>
+   - <change 2>
+   ```
+7. Update the artifact's `Status` (`ready → in progress → merged`).
+
+> Skills (global): **`/status`** = where we are + the next ticket (dependency-aware, read-only). **`/pick-up PR-NNN`** = the alignment phase — reads PRD+TDD+artifact, makes a plan, talks it through; stops there (no code). Implementation (steps 1, 3–7 above) is a separate step after the plan is agreed.
+
+## Source of truth
+**The repo is canonical** — `docs/plan/PR-NNN` artifacts + `docs/prd.md` + `docs/tdd.md`. GitHub Issues are **thin pointers** that map 1:1 to artifact filenames (title + link, never a copy). Never duplicate artifact content into an issue — there must be exactly one place content can change.
+
+## Other conventions
+- One PR = one artifact in `docs/plan/` = one branch = one merge.
+- Don't start a PR until its Acceptance boxes are objectively checkable.
 - **Phases matter:** prove the core dopamine loop (Phases 1–2) *before* adding content (Phases 3–4).
 - Balance knobs live in `config.ts` — tune by playing.
 
