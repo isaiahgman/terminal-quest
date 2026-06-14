@@ -1,6 +1,8 @@
 import terminalKit from 'terminal-kit';
 import { type GameState } from './game/state.js';
 import { sampleWorld } from './game/world/sampleMap.js';
+import { runLoop } from './game/loop.js';
+import { Input } from './input/input.js';
 import { Renderer } from './render/renderer.js';
 
 const term = terminalKit.terminal;
@@ -26,7 +28,7 @@ function main(): void {
   term.hideCursor(true);
   term.grabInput(true);
 
-  // World is deliberately larger than the screen so the camera/viewport matters.
+  // World is larger than the screen so the camera has to follow the player.
   const world = sampleWorld(term.width * 2, term.height * 2);
   const state: GameState = {
     world,
@@ -37,17 +39,20 @@ function main(): void {
   };
 
   const renderer = new Renderer(term);
-  renderer.render(state);
-
-  term.on('key', (name: string) => {
-    if (name === 'q' || name === 'CTRL_C') shutdown(0);
-  });
+  const input = new Input(term);
 
   process.on('SIGINT', () => shutdown(0));
   process.on('SIGTERM', () => shutdown(0));
   process.on('uncaughtException', (err: unknown) => {
     shutdown(1);
     console.error(err);
+  });
+
+  runLoop(state, {
+    drainIntents: () => input.drain(),
+    render: (s) => renderer.render(s),
+    shouldStop: () => input.shouldQuit,
+    onStop: () => shutdown(0),
   });
 }
 
