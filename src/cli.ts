@@ -1,4 +1,7 @@
 import terminalKit from 'terminal-kit';
+import { type GameState } from './game/state.js';
+import { sampleWorld } from './game/world/sampleMap.js';
+import { Renderer } from './render/renderer.js';
 
 const term = terminalKit.terminal;
 
@@ -23,9 +26,18 @@ function main(): void {
   term.hideCursor(true);
   term.grabInput(true);
 
-  term.moveTo(2, 2).bold.cyan('⚔  Terminal Quest');
-  term.moveTo(2, 4).gray('a real-time terminal action-roguelike');
-  term.moveTo(2, 6).dim('press q to quit');
+  // World is deliberately larger than the screen so the camera/viewport matters.
+  const world = sampleWorld(term.width * 2, term.height * 2);
+  const state: GameState = {
+    world,
+    player: {
+      pos: { x: Math.floor(world.width / 2), y: Math.floor(world.height / 2) },
+    },
+    tick: 0,
+  };
+
+  const renderer = new Renderer(term);
+  renderer.render(state);
 
   term.on('key', (name: string) => {
     if (name === 'q' || name === 'CTRL_C') shutdown(0);
