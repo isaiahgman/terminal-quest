@@ -191,6 +191,13 @@ describe('regenStamina', () => {
       regenStamina(makeAttacker({ stamina: 6, maxStamina: 10 }), -4).stamina,
     ).toBe(6);
   });
+
+  it('treats a non-finite amount as a no-op (NaN must not poison stamina)', () => {
+    // Without the Number.isFinite guard the clamp yields NaN, and a NaN
+    // stamina permanently disables the "too tired" gate (NaN < cost is false).
+    const out = regenStamina(makeAttacker({ stamina: 6, maxStamina: 10 }), NaN);
+    expect(out.stamina).toBe(6);
+  });
 });
 
 describe('purity — inputs are never mutated', () => {
@@ -208,6 +215,10 @@ describe('purity — inputs are never mutated', () => {
 
     expect(result.attacker).not.toBe(attacker);
     expect(result.targets[0]).not.toBe(target);
+    // Nested pos must be a fresh object too — a shallow spread would alias it,
+    // letting a downstream consumer mutate the original via result…pos.
+    expect(result.attacker.pos).not.toBe(attacker.pos);
+    expect(result.targets[0]!.pos).not.toBe(target.pos);
     expect(attacker.stamina).toBe(10); // unchanged
     expect(target.hp).toBe(20); // unchanged
   });
@@ -217,5 +228,48 @@ describe('purity — inputs are never mutated', () => {
     const out = regenStamina(input, 3);
     expect(out).not.toBe(input);
     expect(input.stamina).toBe(4);
+  });
+});
+
+/** A seeded mulberry32 PRNG — fixed seed ⇒ a fixed roll stream, so this is deterministic. */
+function mulberry32(seed: number): Rng {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+describe('resolveAttack — hit-chance distribution (seeded)', () => {
+  it('landed fraction over many seeded rolls tracks hitChance', () => {
+    const rng = mulberry32(0x9e3779b9);
+    const spec: AttackSpec = { ...SPEC, hitChance: 0.5 };
+    const trials = 2000;
+    let hits = 0;
+    for (let i = 0; i < trials; i++) {
+      const { outcomes } = resolveAttack(
+        makeAttacker(),
+        [makeTarget(0, 0)],
+        spec,
+        rng,
+      );
+      if (outcomes[0]!.hit) hits++;
+    }
+    // Deterministic for this seed; band proves rate-fidelity, not exact equality.
+    expect(hits / trials).toBeGreaterThan(0.47);
+    expect(hits / trials).toBeLessThan(0.53);
+  });
+
+  it('rolls each in-radius target independently (one roll per target)', () => {
+    const result = resolveAttack(
+      makeAttacker(),
+      [makeTarget(0, 0), makeTarget(1, 0), makeTarget(0, 1)],
+      { ...SPEC, hitChance: 0.5 },
+      scriptedRng([0.1, 0.9, 0.1]),
+    );
+    // Distinct per-target rolls ⇒ distinct outcomes; a single shared roll could not.
+    expect(result.outcomes.map((o) => o.hit)).toEqual([true, false, true]);
   });
 });

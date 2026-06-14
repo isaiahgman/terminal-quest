@@ -100,6 +100,16 @@ function damageTo(
 }
 
 /**
+ * Clone a combatant including its nested `pos`, so a returned object shares no
+ * reference with its input. A bare `{ ...c }` spread would alias `pos`, and a
+ * downstream consumer mutating `result…pos` would then mutate the original —
+ * breaking the purity contract below.
+ */
+function cloneCombatant(c: Combatant): Combatant {
+  return { ...c, pos: { ...c.pos } };
+}
+
+/**
  * Resolve a radius attack.
  *
  * If the attacker lacks the stamina, the attack is **blocked**: copies are
@@ -118,8 +128,8 @@ export function resolveAttack(
 ): AttackResult {
   if (attacker.stamina < spec.staminaCost) {
     return {
-      attacker: { ...attacker },
-      targets: targets.map((t) => ({ ...t })),
+      attacker: cloneCombatant(attacker),
+      targets: targets.map(cloneCombatant),
       blocked: true,
       outcomes: [],
     };
@@ -128,7 +138,7 @@ export function resolveAttack(
   const radiusSquared = spec.radius * spec.radius;
   const outcomes: HitOutcome[] = [];
   const nextTargets = targets.map((target, index) => {
-    const next = { ...target };
+    const next = cloneCombatant(target);
     if (distanceSquared(attacker.pos, target.pos) > radiusSquared) return next;
 
     const hit = rng() < spec.hitChance;
@@ -139,7 +149,10 @@ export function resolveAttack(
   });
 
   return {
-    attacker: { ...attacker, stamina: attacker.stamina - spec.staminaCost },
+    attacker: {
+      ...cloneCombatant(attacker),
+      stamina: attacker.stamina - spec.staminaCost,
+    },
     targets: nextTargets,
     blocked: false,
     outcomes,
@@ -148,13 +161,16 @@ export function resolveAttack(
 
 /**
  * Regenerate stamina by `amount`, clamped to `maxStamina` (and never below the
- * current value, so a non-positive `amount` is a no-op). Returns a new
- * combatant; the input is untouched.
+ * current value, so a non-positive `amount` is a no-op). A non-finite `amount`
+ * (`NaN`/`Infinity` from a bad `rate * dt`) is treated as zero — otherwise it
+ * would poison `stamina` to `NaN` and permanently disable the "too tired" gate
+ * (`NaN < cost` is always `false`). Returns a new combatant; input untouched.
  */
 export function regenStamina(combatant: Combatant, amount: number): Combatant {
+  const delta = Number.isFinite(amount) ? amount : 0;
   const stamina = Math.min(
     combatant.maxStamina,
-    Math.max(combatant.stamina, combatant.stamina + amount),
+    Math.max(combatant.stamina, combatant.stamina + delta),
   );
   return { ...combatant, stamina };
 }
