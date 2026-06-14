@@ -4,18 +4,19 @@ import { createEnemy, ENEMY_TYPES, type EnemyKind } from './enemy.js';
 const KINDS = Object.keys(ENEMY_TYPES) as EnemyKind[];
 
 describe('createEnemy', () => {
-  it('stamps the table stats onto the instance for every kind', () => {
+  it('stamps every table stat field onto the instance for every kind', () => {
     for (const kind of KINDS) {
       const stats = ENEMY_TYPES[kind];
       const enemy = createEnemy(kind, { x: 3, y: 7 });
       expect(enemy.kind).toBe(kind);
       expect(enemy.pos).toEqual({ x: 3, y: 7 });
-      expect(enemy.hp).toBe(stats.hp);
       expect(enemy.maxHp).toBe(stats.hp);
-      expect(enemy.atk).toBe(stats.atk);
-      expect(enemy.speed).toBe(stats.speed);
-      expect(enemy.glyph).toBe(stats.glyph);
-      expect(enemy.color).toBe(stats.color);
+      // Key-driven so the factory and the stat table can't silently drift: if a
+      // field is added to the table and `createEnemy` forgets to copy it, this
+      // fails instead of passing on a stale hand-written list.
+      for (const key of Object.keys(stats) as (keyof typeof stats)[]) {
+        expect(enemy[key]).toBe(stats[key]);
+      }
     }
   });
 

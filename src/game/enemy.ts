@@ -8,7 +8,9 @@
  * Architecture note: the simulation layer must never import the render layer,
  * so `glyph`/`color` are kept as plain strings here (the renderer maps them to
  * a terminal-kit Glyph). Colors use terminal-kit color names, matching
- * `src/render/sprites.ts`.
+ * `src/render/sprites.ts`. Appearance is intentionally data-driven — the
+ * renderer reads `glyph`/`color` off the entity rather than a per-kind switch
+ * in `sprites.ts` (decision recorded in TDD §12).
  */
 
 import type { Vec2 } from './state.js';
@@ -61,11 +63,11 @@ interface EnemyStats {
  * against player stats lands once enemies are wired into update() (PR-005 core)
  * and combat exists (PR-006).
  */
-export const ENEMY_TYPES: Record<EnemyKind, EnemyStats> = {
-  grunt: { hp: 10, atk: 2, speed: 4, glyph: 'g', color: 'green' },
-  runner: { hp: 5, atk: 1, speed: 8, glyph: 'r', color: 'yellow' },
-  brute: { hp: 25, atk: 5, speed: 2, glyph: 'B', color: 'red' },
-};
+export const ENEMY_TYPES: Record<EnemyKind, EnemyStats> = Object.freeze({
+  grunt: Object.freeze({ hp: 10, atk: 2, speed: 4, glyph: 'g', color: 'green' }),
+  runner: Object.freeze({ hp: 5, atk: 1, speed: 8, glyph: 'r', color: 'yellow' }),
+  brute: Object.freeze({ hp: 25, atk: 5, speed: 2, glyph: 'B', color: 'red' }),
+});
 
 /**
  * Build a fresh enemy of `kind` at `pos`. `hp` starts at `maxHp`. The position

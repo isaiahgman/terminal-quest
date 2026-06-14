@@ -30,7 +30,8 @@ src/
     loop.ts              fixed-timestep loop (update + render)
     state.ts             GameState type + initialState
     update.ts            pure tick: move enemies, resolve attacks, stamina, pickups
-    entities.ts          Player/Enemy/Pickup/Boss types + factories
+    entities.ts          Player/Pickup/Boss types + factories  (Enemy split out → enemy.ts; see §12)
+    enemy.ts             Enemy type + createEnemy factory + ENEMY_TYPES data table  (PR-005; see §12)
     combat.ts            radius attack resolution, hit chance, damage, stamina  (PURE, tested)
     progression.ts       xp/level curve, stat growth                            (PURE, tested)
     rng.ts               seeded RNG (wrap rot.js RNG)
@@ -45,14 +46,14 @@ src/
   input/input.ts         keypress → intents
   save/save.ts           (de)serialize, file IO, autosave
   data/
-    weapons.ts  enemies.ts  bosses.ts
+    weapons.ts  bosses.ts  (enemy data consolidated into game/enemy.ts; see §12)
   config.ts              tunables (fps, viewport, balance knobs)
 ```
 
 ## 5. State model
 - `GameState = { player, enemies[], pickups[], bosses[], world, camera, base, status, bossesDefeated, rngSeed }`
 - `Player = { pos, hp, maxHp, stamina, maxStamina, level, xp, weapon, damage, ... }`
-- `Enemy = { pos, hp, atk, speed, aiState }`  ·  `Boss = Enemy + { id, name, defeated }`
+- `Enemy = { kind, pos, hp, maxHp, atk, speed, glyph, color, aiState* }`  ·  `Boss = Enemy + { id, name, defeated }`  (*`aiState` lands with the AI slice; `glyph`/`color` are plain strings the renderer maps — see §12)
 - `World = { tiles, width, height, seed }`  ·  `Camera = { x, y, viewW, viewH }`
 - `Pickup = { pos, kind: 'weapon' | ... , payload }`
 
@@ -87,3 +88,12 @@ src/
 - "Feel" is hard + renderer-dependent → prove the loop first (MVP), juice later.
 - Scope (10 bosses, base, dungeons) → phased plan; MVP is the core loop only.
 - Balance/numbers → isolated pure `progression.ts` + `combat.ts` so tuning is fast and tested.
+
+## 12. Amendments
+Deviations from the original §4/§5 design, recorded so the change — and its reason — is explicit. We started with the layout/model above; this is where it bends and why.
+
+- **2026-06-14 (PR-005) — enemy type, factory, and data consolidated into `src/game/enemy.ts`.** §4 originally split this across `game/entities.ts` (Enemy type + factory) and `data/enemies.ts` (the stat table). The PR-005 data slice instead lands them in one new leaf module, `game/enemy.ts`.
+  - *Why:* it keeps the slice a single, cohesive, dependency-free file — it touches no shared files (`entities.ts`/`update.ts`), so spawning, AI, and rendering can land in separate PRs without contention. Co-locating the `Enemy` shape with the `ENEMY_TYPES` it stamps keeps the type and its data in one place rather than two files that must stay in sync.
+  - *Layer bet intact:* `enemy.ts` lives in the sim layer and imports nothing from `render/`; `glyph`/`color` are plain strings the renderer maps, so the sim→render isolation in §2 still holds.
+  - *§5 Enemy model updated to match:* added `kind` (archetype/AI discriminant), `maxHp` (HUD bars + heal clamping), and `glyph`/`color` (data-driven appearance — the renderer reads these off the entity rather than a `sprites.ts` per-kind switch). `aiState` is deferred to the AI slice (added then, not speculatively now).
+  - *Future entity types:* Player/Pickup/Boss may still follow the original `entities.ts` plan, and `weapons.ts`/`bosses.ts` data still live under `data/`. If a second consolidated entity module proves better, revisit then.
