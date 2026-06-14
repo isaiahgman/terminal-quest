@@ -53,27 +53,37 @@ describe('Rng', () => {
     expect(() => rng.nextInt(2.5)).toThrow(RangeError);
   });
 
-  it('saving and restoring the seed reproduces the stream', () => {
+  it('saving and restoring the state reproduces the stream', () => {
     const rng = new Rng(2024);
     // Advance the stream a few steps before snapshotting.
     rng.nextFloat();
     rng.nextFloat();
 
-    const saved = rng.getSeed();
+    const saved = rng.getState();
     const expected = Array.from({ length: 50 }, () => rng.nextFloat());
 
     // Restore into the same instance and replay.
-    rng.setSeed(saved);
+    rng.setState(saved);
     const replayedSame = Array.from({ length: 50 }, () => rng.nextFloat());
     expect(replayedSame).toEqual(expected);
 
     // Restore into a fresh instance (the save-file path) and replay.
     const restored = new Rng(0);
-    restored.setSeed(saved);
+    restored.setState(saved);
     const replayedFresh = Array.from({ length: 50 }, () =>
       restored.nextFloat(),
     );
     expect(replayedFresh).toEqual(expected);
+  });
+
+  it('getState returns an independent snapshot, not a live reference', () => {
+    const rng = new Rng(1234);
+    const snapshot = rng.getState();
+    const snapshotCopy = [...snapshot];
+    // Advancing the stream must not mutate an already-captured snapshot.
+    rng.nextFloat();
+    rng.nextFloat();
+    expect(snapshot).toEqual(snapshotCopy);
   });
 
   it('pick returns an element of the array', () => {

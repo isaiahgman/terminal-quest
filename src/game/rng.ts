@@ -1,43 +1,48 @@
+import { RNG } from 'rot-js';
+
 /**
  * Deterministic seeded pseudo-random number generator.
  *
- * The simulation must be reproducible from a seed (see TDD §2, §9): the same
- * seed always yields the same stream, so saves can store the world seed instead
- * of the world, and combat/progression are unit-testable. This is a `mulberry32`
- * generator — a fast, well-distributed 32-bit PRNG whose entire state is a single
- * integer, which makes save/restore trivial. It never touches `Math.random`.
+ * A thin wrapper over rot.js's `RNG` (an Alea generator), per TDD §4 — "wrap
+ * rot.js RNG". The simulation must be reproducible from a seed (TDD §2, §9): the
+ * same seed always yields the same stream, so saves can store the world seed
+ * instead of the world, and combat/progression stay unit-testable. rot.js is
+ * already the project's procedural-gen dependency, so reusing its generator keeps
+ * the whole world derived from one RNG family instead of two. Never touches
+ * `Math.random`.
+ *
+ * Each instance owns its own generator, cloned from the rot.js singleton so
+ * instances never share global state, then re-seeded.
  */
 export class Rng {
-  /**
-   * The generator's mutable internal state. Advancing the stream mutates it,
-   * so capturing it via {@link getSeed} and later restoring it with
-   * {@link setSeed} resumes the exact same sequence — that is what lets a save
-   * file replay the world deterministically.
-   */
-  private state: number;
+  /** This instance's own rot.js generator, independent of the global singleton. */
+  private readonly rng = RNG.clone();
 
   constructor(seed: number) {
     // Coerce to an unsigned 32-bit integer so behaviour is identical regardless
-    // of how the caller derived the seed (float, negative, etc.).
-    this.state = seed >>> 0;
+    // of how the caller derived the seed (float, negative, etc.) and so integer
+    // seeds bypass rot.js's `seed < 1 ? 1 / seed` reciprocal branch.
+    this.rng.setSeed(seed >>> 0);
   }
 
-  /** Returns the current internal state — persist this to restore the stream. */
-  getSeed(): number {
-    return this.state;
+  /**
+   * Returns the generator's full internal state — persist this to restore the
+   * exact stream mid-game. A save made mid-combat has already consumed part of
+   * the stream, so the original seed alone would not reproduce it; the captured
+   * state will. Pair with {@link setState}.
+   */
+  getState(): number[] {
+    return this.rng.getState();
   }
 
   /** Restores a previously captured state so the stream continues from there. */
-  setSeed(seed: number): void {
-    this.state = seed >>> 0;
+  setState(state: number[]): void {
+    this.rng.setState(state);
   }
 
   /** Next float in the half-open interval [0, 1). */
   nextFloat(): number {
-    this.state = (this.state + 0x6d2b79f5) | 0;
-    let t = Math.imul(this.state ^ (this.state >>> 15), 1 | this.state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    return this.rng.getUniform();
   }
 
   /** Next integer in the half-open interval [0, maxExclusive). */
@@ -47,7 +52,8 @@ export class Rng {
         `nextInt requires a positive integer bound, got ${maxExclusive}`,
       );
     }
-    return Math.floor(this.nextFloat() * maxExclusive);
+    // getUniformInt's upper bound is inclusive, so map [0, maxExclusive) onto it.
+    return this.rng.getUniformInt(0, maxExclusive - 1);
   }
 
   /** Picks a uniformly random element from a non-empty array. */
@@ -55,9 +61,13 @@ export class Rng {
     if (items.length === 0) {
       throw new RangeError('pick requires a non-empty array');
     }
-    const index = this.nextInt(items.length);
-    // Safe: index is in [0, length) by construction, but `noUncheckedIndexedAccess`
-    // widens the element type to `T | undefined`, so assert the proven invariant.
-    return items[index] as T;
+    // rot.js `getItem` only reads the array; the cast bridges its mutable-array
+    // parameter type. It returns null solely for an empty array (handled above),
+    // and the explicit guard narrows `T | null` to `T` without an assertion.
+    const item = this.rng.getItem(items as T[]);
+    if (item === null) {
+      throw new RangeError('pick requires a non-empty array');
+    }
+    return item;
   }
 }
