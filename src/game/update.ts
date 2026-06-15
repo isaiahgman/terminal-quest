@@ -22,14 +22,24 @@ export function update(
 ): GameState {
   let { x, y } = state.player.pos;
 
+  // Cap movement at one tile per tick. Auto-repeat (holding a key) and the
+  // input buffer can queue several move intents per simulation step; applying
+  // all of them would let the player jump multiple tiles in a single tick,
+  // breaking the fixed-timestep model. Take the last move intent — the player's
+  // most recent direction — and apply at most that single step.
+  let move: MoveIntent | undefined;
   for (const intent of intents) {
     if (intent.type === 'move') {
-      const nx = x + intent.dx;
-      const ny = y + intent.dy;
-      if (isWalkable(state.world, nx, ny)) {
-        x = nx;
-        y = ny;
-      }
+      move = intent;
+    }
+  }
+
+  if (move !== undefined) {
+    const nx = x + move.dx;
+    const ny = y + move.dy;
+    if (isWalkable(state.world, nx, ny)) {
+      x = nx;
+      y = ny;
     }
   }
 
