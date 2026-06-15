@@ -1,10 +1,5 @@
 import terminalKit from 'terminal-kit';
-import {
-  isWalkable,
-  type GameState,
-  type Vec2,
-  type World,
-} from './game/state.js';
+import { isWalkable, type GameState, type Vec2, type World } from './game/state.js';
 import { sampleWorld } from './game/world/sampleMap.js';
 import { runLoop } from './game/loop.js';
 import { Input } from './input/input.js';
