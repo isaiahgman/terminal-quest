@@ -40,4 +40,35 @@ describe('update', () => {
     expect(before.player.pos).toEqual({ x: 1, y: 1 });
     expect(before.tick).toBe(0);
   });
+
+  it('advances at most one tile for a batch of same-direction intents', () => {
+    // Holding "right" auto-repeats into [right, right]; the player may only
+    // advance a single tile per tick, not jump two.
+    const next = update(makeState(), [
+      { type: 'move', dx: 1, dy: 0 },
+      { type: 'move', dx: 1, dy: 0 },
+    ]);
+    expect(next.player.pos).toEqual({ x: 2, y: 1 });
+  });
+
+  it('applies only the valid step when a blocked intent precedes a valid one', () => {
+    // up-left lands on the (0,0) corner wall (blocked); the later valid "right"
+    // is the one that takes effect — and only by one tile.
+    const next = update(makeState(), [
+      { type: 'move', dx: -1, dy: -1 },
+      { type: 'move', dx: 1, dy: 0 },
+    ]);
+    expect(next.player.pos).toEqual({ x: 2, y: 1 });
+  });
+
+  it('increments the tick by exactly 1 regardless of intent count', () => {
+    expect(update(makeState(), []).tick).toBe(1);
+    expect(
+      update(makeState(), [
+        { type: 'move', dx: 1, dy: 0 },
+        { type: 'move', dx: 0, dy: 1 },
+        { type: 'move', dx: -1, dy: 0 },
+      ]).tick,
+    ).toBe(1);
+  });
 });
