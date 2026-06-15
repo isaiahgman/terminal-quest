@@ -4,8 +4,8 @@ import type { Vec2 } from '../state.js';
 export interface Camera {
   x: number;
   y: number;
-  width: number;
-  height: number;
+  viewW: number;
+  viewH: number;
 }
 
 function clamp(v: number, min: number, max: number): number {
@@ -27,5 +27,5 @@ export function computeCamera(
   const maxY = Math.max(0, worldH - viewH);
   const x = clamp(target.x - Math.floor(viewW / 2), 0, maxX);
   const y = clamp(target.y - Math.floor(viewH / 2), 0, maxY);
-  return { x, y, width: viewW, height: viewH };
+  return { x, y, viewW, viewH };
 }
