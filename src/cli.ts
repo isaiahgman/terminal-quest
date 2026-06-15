@@ -1,5 +1,10 @@
 import terminalKit from 'terminal-kit';
-import { type GameState } from './game/state.js';
+import {
+  isWalkable,
+  type GameState,
+  type Vec2,
+  type World,
+} from './game/state.js';
 import { sampleWorld } from './game/world/sampleMap.js';
 import { runLoop } from './game/loop.js';
 import { Input } from './input/input.js';
@@ -23,6 +28,29 @@ function shutdown(code = 0): void {
   process.exit(code);
 }
 
+/**
+ * Pick a guaranteed-walkable spawn. The world center is the intended spawn,
+ * but procedural generation can put a wall there, so we spiral outward and
+ * return the first walkable tile — never trusting the center coincidentally.
+ */
+function findSpawn(world: World): Vec2 {
+  const cx = Math.floor(world.width / 2);
+  const cy = Math.floor(world.height / 2);
+  const maxRadius = Math.max(world.width, world.height);
+  for (let radius = 0; radius <= maxRadius; radius++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        // Only the ring at exactly `radius` is new this iteration.
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+        const x = cx + dx;
+        const y = cy + dy;
+        if (isWalkable(world, x, y)) return { x, y };
+      }
+    }
+  }
+  throw new Error('world has no walkable tile to spawn the player on');
+}
+
 function main(): void {
   term.fullscreen(true);
   term.hideCursor(true);
@@ -33,7 +61,7 @@ function main(): void {
   const state: GameState = {
     world,
     player: {
-      pos: { x: Math.floor(world.width / 2), y: Math.floor(world.height / 2) },
+      pos: findSpawn(world),
     },
     tick: 0,
   };
