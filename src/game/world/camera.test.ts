@@ -28,8 +28,8 @@ describe('computeCamera', () => {
 
   it('passes the viewport dimensions through as the camera size', () => {
     const cam = computeCamera({ x: 50, y: 50 }, 20, 10, 100, 100);
-    expect(cam.width).toBe(20);
-    expect(cam.height).toBe(10);
+    expect(cam.viewW).toBe(20);
+    expect(cam.viewH).toBe(10);
   });
 
   it('floors the centering offset for odd viewport dimensions', () => {
