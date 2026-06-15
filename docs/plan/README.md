@@ -38,6 +38,13 @@ Strategy: **prove the core dopamine loop before adding content.** Phases 1–2 d
 | [014](PR-014-dungeons.md) | High-risk/high-reward dungeons | 011 |
 | [015](PR-015-juice-game-feel.md) | Juice: hit flashes, damage numbers, screen shake | 008 |
 
+## Beta feedback — input feel (2026-06-15)
+Surfaced by play-testing the merged movement build. Both fix the input layer (`src/input/input.ts`); do them in order — 017 builds on 016's held-direction state.
+| PR | Title | Depends on |
+|----|-------|-----------|
+| [016](PR-016-input-responsiveness.md) | Responsive held-direction movement (kill the OS key-repeat stall) | 003 |
+| [017](PR-017-diagonal-movement.md) | Diagonal (8-direction) movement | 016 |
+
 ## Dependency graph (spine)
 ```
 000─001─002─003─004─005─006─┬─007─┬─008────────────┐
