@@ -37,20 +37,8 @@ describe('stepEnemy — advancing toward the player on a clock', () => {
   it('a faster enemy outpaces a slower one over the same dt', () => {
     const player: Vec2 = { x: 50, y: 0 };
     const ai = createEnemyAi();
-    const runner = stepEnemy(
-      createEnemy('runner', { x: 0, y: 0 }),
-      ai,
-      player,
-      open,
-      1,
-    ); // speed 8
-    const brute = stepEnemy(
-      createEnemy('brute', { x: 0, y: 0 }),
-      ai,
-      player,
-      open,
-      1,
-    ); // speed 2
+    const runner = stepEnemy(createEnemy('runner', { x: 0, y: 0 }), ai, player, open, 1); // speed 8
+    const brute = stepEnemy(createEnemy('brute', { x: 0, y: 0 }), ai, player, open, 1); // speed 2
     expect(runner.enemy.pos.x).toBeGreaterThan(brute.enemy.pos.x);
   });
 
