@@ -16,6 +16,7 @@ Merged means: a large seeded walkable world generates with obstacles, the player
 
 ## Plan
 1. Seed the RNG; generate with a rot.js map generator (cellular for caverns, or open field + scattered obstacles).
+   - **rot.js map generators read the _global_ `ROT.RNG` singleton, not an injected instance.** The `Rng` wrapper (PR-008's seeded RNG) clones an independent generator, so constructing one does NOT seed map gen. Before generating, call `RNG.setSeed(worldSeed)` (import `{ RNG } from 'rot-js'`) so the map is deterministic from the world seed — otherwise it defaults to `Date.now()` and differs every launch, breaking this PR's "same seed → same world" acceptance and PR-012 resume.
 2. Store tiles in `world`; add a `isWalkable(pos)` check used by movement in `update()`.
 
 ## Constraints
