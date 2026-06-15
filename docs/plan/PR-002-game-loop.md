@@ -1,5 +1,5 @@
 # PR-002 — Fixed-timestep game loop
-Status: ready · Depends on: PR-001 · Scope: ~M · Touches: src/game/loop.ts, src/game/update.ts, src/cli.ts
+Status: merged · Depends on: PR-001 · Scope: ~M · Touches: src/game/loop.ts, src/game/update.ts, src/cli.ts
 
 ## Context
 The heartbeat ([tdd §3](../tdd.md#3-game-loop)) — the real-time clock that later makes enemies advance whether you move or not.

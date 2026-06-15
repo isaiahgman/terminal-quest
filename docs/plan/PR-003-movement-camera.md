@@ -1,5 +1,5 @@
 # PR-003 — Player movement + following camera
-Status: ready · Depends on: PR-002 · Scope: ~M · Touches: src/input/input.ts, src/game/update.ts, src/game/entities.ts, src/game/world/camera.ts, src/render/renderer.ts
+Status: merged · Depends on: PR-002 · Scope: ~M · Touches: src/input/input.ts, src/game/update.ts, src/game/entities.ts, src/game/world/camera.ts, src/render/renderer.ts
 
 ## Context
 First interactivity + the camera that makes a world bigger than the screen feel open ([prd F1](../prd.md#10-features), [tdd §7](../tdd.md#7-world-gen--camera)).

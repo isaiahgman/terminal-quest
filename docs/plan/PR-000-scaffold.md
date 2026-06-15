@@ -1,5 +1,5 @@
 # PR-000 — Project scaffold
-Status: ready · Depends on: none · Scope: ~S · Touches: package.json, tsconfig.json, src/cli.ts
+Status: merged · Depends on: none · Scope: ~S · Touches: package.json, tsconfig.json, src/cli.ts
 
 ## Context
 Foundation for everything ([tdd §1,4](../tdd.md#1-stack)). Establishes the TS + terminal-kit + rot.js toolchain.
