@@ -8,17 +8,21 @@ A real-time terminal action-roguelike with Solo-Leveling power progression (Vamp
 - `docs/plan/README.md` — phased roadmap + atomic per-PR artifacts (build in dependency order)
 
 ## Stack
-TypeScript (strict) · **terminal-kit** (ScreenBuffer rendering + input) · **rot.js** (procedural gen, seeded RNG, FOV, pathfinding) · vitest · pnpm · Node ≥ 18.
+TypeScript (strict) · **terminal-kit** (ScreenBuffer rendering + input) · **rot.js** (procedural gen, seeded RNG, FOV, pathfinding) · vitest · ESLint + Prettier · **npm** · Node ≥ 18.
 
-## Commands (once PR-000 lands)
-- `pnpm dev` — run the game (tsx)
-- `pnpm test` — vitest (pure sim/combat/progression)
-- `pnpm typecheck` — tsc --noEmit
-- `pnpm build` — compile to dist/
+## Commands
+- `npm run dev` — run the game (tsx)
+- `npm test` — vitest (pure sim/combat/progression)
+- `npm run typecheck` — tsc --noEmit
+- `npm run lint` / `npm run format` — ESLint / Prettier
+- `npm run check` — **the feedback loop**: typecheck + lint + test (must be green before any PR)
+- `npm run build` — compile to dist/
+
+⚠️ We use **npm** (corepack's pnpm didn't activate); lockfile is `package-lock.json`, not pnpm.
 
 ## The architecture bet (do not violate)
 Three isolated layers:
-1. **Simulation** (`src/game/`) — pure `update(state, intents, dt, rng) → state`. No I/O, no drawing. Deterministic via injected seeded RNG.
+1. **Simulation** (`src/game/`) — pure `update(state, intents) → state` (add params like `dt`/`rng` only when actually used). No I/O, no drawing, no `Math.random`. Deterministic via an injected seeded RNG.
 2. **Render** (`src/render/`) — reads state, draws to ScreenBuffer. **Read-only**, never mutates state.
 3. **Input** (`src/input/`) — keypress → intents.
 
@@ -29,7 +33,7 @@ Keep combat/progression math in pure, tested modules (`combat.ts`, `progression.
 1. **Branch + worktree** — `git worktree add ../terminal-quest-pr-005 -b pr-005-<slug>` and work there (isolated from main).
 2. **Pick the planning artifact** — `docs/plan/PR-005-*.md`.
 3. **Breakdown / context-collection stage** — before coding: read the artifact + its `Depends on` PRs + the PRD/TDD sections it links + the existing code it touches. Restate the goal, list files to change, confirm the Acceptance boxes are objectively checkable, surface unknowns.
-4. **Implement** to the acceptance criteria; run `pnpm typecheck` + `pnpm test`.
+4. **Implement** to the acceptance criteria; run `npm run check` (typecheck + lint + test) — must be green.
 5. **Commit** on the branch (co-author trailer) and push the **branch** (never `main`).
 6. **Open a PR** via the GitHub MCP. PR body format is exactly:
    ```
@@ -46,11 +50,16 @@ Keep combat/progression math in pure, tested modules (`combat.ts`, `progression.
 ## Source of truth
 **The repo is canonical** — `docs/plan/PR-NNN` artifacts + `docs/prd.md` + `docs/tdd.md`. GitHub Issues are **thin pointers** that map 1:1 to artifact filenames (title + link, never a copy). Never duplicate artifact content into an issue — there must be exactly one place content can change.
 
-## Other conventions
-- One PR = one artifact in `docs/plan/` = one branch = one merge.
+## Standards & PR discipline
+- **Strictest ESLint + Prettier — no exceptions.** Never disable/loosen a rule; no `eslint-disable` / `@ts-ignore` / `any` / `_`-prefix tricks; no speculative unused code (add a param/field only when something uses it). Fix the code, not the config. `npm run check` must be green before every PR.
+- **Tiny, atomic PRs.** One planning artifact normally maps to *several* small PRs — that's expected. Never combine artifacts into one PR; never ship a massive PR; when unsure, split smaller.
+- **Isaiah merges every PR — never merge one yourself.** Base every PR on `main` (no stacking: a deleted base branch auto-closes its child PRs).
 - Don't start a PR until its Acceptance boxes are objectively checkable.
 - **Phases matter:** prove the core dopamine loop (Phases 1–2) *before* adding content (Phases 3–4).
 - Balance knobs live in `config.ts` — tune by playing.
+
+## Working in parallel (safe fan-out)
+The **pure logic modules** in `src/game/` (e.g. `rng.ts`, `world/generate.ts`, `enemy.ts`, `combat.ts`) are independent — multiple agents can build them at once, each in its own worktree and its own file. **Integration** (wiring into the shared files: `cli.ts`, `game/update.ts`, `render/renderer.ts`, `render/sprites.ts`, `game/state.ts`) is the sequential chokepoint — do those one PR at a time to avoid conflicts.
 
 ## Gotchas
 - Real-time + terminal: cap fps (~12–15), use ScreenBuffer **delta** draws (no full clears) to avoid flicker.
@@ -58,4 +67,6 @@ Keep combat/progression math in pure, tested modules (`combat.ts`, `progression.
 - Save the **world seed**, not the tile array (world is deterministic from seed).
 
 ## Current status
-Planning complete (PRD + TDD + PR-000…015 across 4 phases). No code yet — **next step is implementing PR-000 (scaffold).**
+**Merged:** PR-000 scaffold · PR-001 tile renderer + state + camera · PR-002/003 game loop + movement + following camera · linter (ESLint/Prettier + `npm run check`).
+**In flight (parallel pure-module PRs):** seeded RNG, procedural world generator (PR-004 core), enemy model (PR-005 core), combat math (PR-006 core).
+**Next:** integration PRs (sequential) — wire world-gen + enemies + combat into the loop/renderer so they become visible and playable.
