@@ -64,8 +64,20 @@ interface EnemyStats {
  * and combat exists (PR-006).
  */
 export const ENEMY_TYPES: Record<EnemyKind, EnemyStats> = Object.freeze({
-  grunt: Object.freeze({ hp: 10, atk: 2, speed: 4, glyph: 'g', color: 'green' }),
-  runner: Object.freeze({ hp: 5, atk: 1, speed: 8, glyph: 'r', color: 'yellow' }),
+  grunt: Object.freeze({
+    hp: 10,
+    atk: 2,
+    speed: 4,
+    glyph: 'g',
+    color: 'green',
+  }),
+  runner: Object.freeze({
+    hp: 5,
+    atk: 1,
+    speed: 8,
+    glyph: 'r',
+    color: 'yellow',
+  }),
   brute: Object.freeze({ hp: 25, atk: 5, speed: 2, glyph: 'B', color: 'red' }),
 });
 
