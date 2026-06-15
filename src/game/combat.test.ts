@@ -85,6 +85,58 @@ describe('resolveAttack — radius selection', () => {
 
     expect(result.outcomes.map((o) => o.hit)).toEqual([false, true]);
   });
+
+  it('reports outcome.index by input position, not by outcome order', () => {
+    // Out-of-radius target FIRST: its slot is skipped, so the in-radius target
+    // at array index 1 must still report index 1 (not the outcomes length, 0).
+    const result = resolveAttack(
+      makeAttacker(),
+      [makeTarget(3, 0), makeTarget(0, 0)],
+      SPEC,
+      scriptedRng([0.0]), // one roll only — the outside target spends none
+    );
+    expect(result.outcomes).toEqual([{ index: 1, hit: true, damage: 5 }]);
+  });
+
+  it('includes a target on the inclusive boundary off-axis (distance == radius)', () => {
+    // (1,1) is distance √2 from the origin; radius √2 ⇒ exactly on the boundary.
+    const result = resolveAttack(
+      makeAttacker(),
+      [makeTarget(1, 1)],
+      { ...SPEC, radius: Math.SQRT2 },
+      scriptedRng([0.0]),
+    );
+    expect(result.outcomes).toEqual([{ index: 0, hit: true, damage: 5 }]);
+  });
+
+  it('handles empty targets — deducts stamina, no roll, no outcomes', () => {
+    const result = resolveAttack(makeAttacker(), [], SPEC, noRng);
+    expect(result.blocked).toBe(false);
+    expect(result.outcomes).toEqual([]);
+    expect(result.attacker.stamina).toBe(7); // 10 − 3, cost still paid
+  });
+
+  it('fails closed on a negative radius — selects nobody, spends no roll', () => {
+    const result = resolveAttack(
+      makeAttacker(),
+      [makeTarget(0, 0)], // would be dead-centre for any non-negative radius
+      { ...SPEC, radius: -2 },
+      noRng,
+    );
+    expect(result.outcomes).toEqual([]);
+    expect(result.targets[0]!.hp).toBe(20);
+  });
+
+  it('fails closed on a NaN target coordinate — excluded, spends no roll', () => {
+    const result = resolveAttack(
+      makeAttacker(),
+      [makeTarget(NaN, 0)],
+      SPEC,
+      noRng,
+    );
+    expect(result.outcomes).toEqual([]);
+    expect(result.targets[0]!.hp).toBe(20);
+  });
 });
 
 describe('resolveAttack — hit chance', () => {
@@ -110,6 +162,26 @@ describe('resolveAttack — hit chance', () => {
     );
     expect(result.outcomes[0]).toEqual({ index: 0, hit: false, damage: 0 });
     expect(result.targets[0]!.hp).toBe(20);
+  });
+
+  it('hitChance 0 never hits, even on the lowest possible roll', () => {
+    const result = resolveAttack(
+      makeAttacker(),
+      [makeTarget(0, 0)],
+      { ...SPEC, hitChance: 0 },
+      scriptedRng([0.0]),
+    );
+    expect(result.outcomes[0]!.hit).toBe(false);
+  });
+
+  it('hitChance 1 always hits, even on the highest possible roll', () => {
+    const result = resolveAttack(
+      makeAttacker(),
+      [makeTarget(0, 0)],
+      { ...SPEC, hitChance: 1 },
+      scriptedRng([0.999999]),
+    );
+    expect(result.outcomes[0]!.hit).toBe(true);
   });
 });
 
@@ -190,6 +262,14 @@ describe('regenStamina', () => {
     expect(
       regenStamina(makeAttacker({ stamina: 6, maxStamina: 10 }), -4).stamina,
     ).toBe(6);
+  });
+
+  it('never reduces stamina that already exceeds maxStamina', () => {
+    // Defensive: nothing overfills today, but the contract is "never below the
+    // current value" — regen must hold an over-max value, not clamp it down.
+    expect(
+      regenStamina(makeAttacker({ stamina: 15, maxStamina: 10 }), 3).stamina,
+    ).toBe(15);
   });
 
   it('treats a non-finite amount as a no-op (NaN must not poison stamina)', () => {

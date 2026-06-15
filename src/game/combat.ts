@@ -118,6 +118,11 @@ function cloneCombatant(c: Combatant): Combatant {
  * radius** gets an independent `hitChance` roll (RNG is consumed only for
  * those targets, in input order); a successful roll applies {@link damageTo}.
  *
+ * Target selection **fails closed**: a negative or `NaN` `spec.radius`, or a
+ * target with a `NaN` coordinate, selects *nobody* (rather than attacking
+ * everyone and silently desyncing the deterministic RNG sequence the rest of
+ * the engine relies on).
+ *
  * Pure: inputs are never mutated; all returned combatants are fresh objects.
  */
 export function resolveAttack(
@@ -135,11 +140,16 @@ export function resolveAttack(
     };
   }
 
-  const radiusSquared = spec.radius * spec.radius;
+  // A negative/NaN radius yields -1, so the `<=` test below excludes everyone.
+  const radiusSquared = spec.radius >= 0 ? spec.radius * spec.radius : -1;
   const outcomes: HitOutcome[] = [];
   const nextTargets = targets.map((target, index) => {
     const next = cloneCombatant(target);
-    if (distanceSquared(attacker.pos, target.pos) > radiusSquared) return next;
+    // Negated so a NaN distance (NaN <= r² is false) fails closed: excluded,
+    // and crucially consumes no roll, keeping the RNG sequence deterministic.
+    if (!(distanceSquared(attacker.pos, target.pos) <= radiusSquared)) {
+      return next;
+    }
 
     const hit = rng() < spec.hitChance;
     const damage = hit ? damageTo(attacker, target, spec) : 0;
@@ -148,11 +158,10 @@ export function resolveAttack(
     return next;
   });
 
+  const nextAttacker = cloneCombatant(attacker);
+  nextAttacker.stamina = attacker.stamina - spec.staminaCost;
   return {
-    attacker: {
-      ...cloneCombatant(attacker),
-      stamina: attacker.stamina - spec.staminaCost,
-    },
+    attacker: nextAttacker,
     targets: nextTargets,
     blocked: false,
     outcomes,
@@ -161,16 +170,20 @@ export function resolveAttack(
 
 /**
  * Regenerate stamina by `amount`, clamped to `maxStamina` (and never below the
- * current value, so a non-positive `amount` is a no-op). A non-finite `amount`
+ * current value, so a non-positive `amount` is a no-op). If stamina already
+ * sits above `maxStamina`, it is held — never clamped *down*, honouring the
+ * "never below the current value" contract. A non-finite `amount`
  * (`NaN`/`Infinity` from a bad `rate * dt`) is treated as zero — otherwise it
  * would poison `stamina` to `NaN` and permanently disable the "too tired" gate
  * (`NaN < cost` is always `false`). Returns a new combatant; input untouched.
  */
 export function regenStamina(combatant: Combatant, amount: number): Combatant {
   const delta = Number.isFinite(amount) ? amount : 0;
-  const stamina = Math.min(
-    combatant.maxStamina,
-    Math.max(combatant.stamina, combatant.stamina + delta),
+  // max(current, …) outside guarantees regen never reduces stamina, even when
+  // the current value is already above maxStamina.
+  const stamina = Math.max(
+    combatant.stamina,
+    Math.min(combatant.maxStamina, combatant.stamina + delta),
   );
   return { ...combatant, stamina };
 }
