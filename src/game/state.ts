@@ -14,8 +14,8 @@ export type Tile = 'floor' | 'wall';
 export interface World {
   readonly width: number;
   readonly height: number;
-  /** Row-major: tiles[y][x]. */
-  readonly tiles: Tile[][];
+  /** Row-major: tiles[y][x]. Deeply read-only — Render is read-only (see TDD). */
+  readonly tiles: ReadonlyArray<ReadonlyArray<Tile>>;
   readonly seed: number;
 }
 

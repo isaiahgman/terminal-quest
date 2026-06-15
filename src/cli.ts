@@ -72,8 +72,8 @@ function main(): void {
   process.on('SIGINT', () => shutdown(0));
   process.on('SIGTERM', () => shutdown(0));
   process.on('uncaughtException', (err: unknown) => {
-    shutdown(1);
     console.error(err);
+    shutdown(1);
   });
 
   runLoop(state, {
