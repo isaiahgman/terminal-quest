@@ -6,13 +6,16 @@ import { RNG } from 'rot-js';
  * A thin wrapper over rot.js's `RNG` (an Alea generator), per TDD §4 — "wrap
  * rot.js RNG". The simulation must be reproducible from a seed (TDD §2, §9): the
  * same seed always yields the same stream, so saves can store the world seed
- * instead of the world, and combat/progression stay unit-testable. rot.js is
- * already the project's procedural-gen dependency, so reusing its generator keeps
- * the whole world derived from one RNG family instead of two. Never touches
- * `Math.random`.
+ * instead of the world, and combat/progression stay unit-testable. Reuses rot.js
+ * (already the project's procedural-gen dependency) rather than a second hand-rolled
+ * PRNG. Never touches `Math.random`.
  *
  * Each instance owns its own generator, cloned from the rot.js singleton so
- * instances never share global state, then re-seeded.
+ * instances never share global state, then re-seeded. This is the INJECTED RNG
+ * for sim logic (combat/progression). Note it does NOT seed rot.js's *global*
+ * `ROT.RNG` singleton, which rot.js map generators (e.g. `ROT.Map.Cellular`) read
+ * directly — so world gen (PR-004) must seed that global from the same world seed
+ * separately to make "same seed → same world" hold.
  */
 export class Rng {
   /** This instance's own rot.js generator, independent of the global singleton. */
@@ -20,8 +23,9 @@ export class Rng {
 
   constructor(seed: number) {
     // Coerce to an unsigned 32-bit integer so behaviour is identical regardless
-    // of how the caller derived the seed (float, negative, etc.) and so integer
-    // seeds bypass rot.js's `seed < 1 ? 1 / seed` reciprocal branch.
+    // of how the caller derived the seed (float, negative, etc.). Every non-zero
+    // result then skips rot.js's `seed < 1 ? 1 / seed` reciprocal branch; seed 0
+    // is the lone exception (1 / 0 → Infinity → a valid but degenerate stream).
     this.rng.setSeed(seed >>> 0);
   }
 
