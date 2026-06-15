@@ -46,10 +46,12 @@ export interface EnemyAi {
    */
   moveBudget: number;
   /**
-   * Current behaviour, derived from proximity each step: `advance` while far
-   * (greedy step toward the player, blocked by walls), `charge` once within
-   * {@link CHARGE_RADIUS} (commit straight in). Exposed so the renderer/HUD can
-   * react to a charging swarm (prd §9 juice, later).
+   * Current behaviour, decided from the **pre-move** proximity each step:
+   * `advance` while far (greedy budgeted steps toward the player, blocked by
+   * walls), `charge` once within {@link CHARGE_RADIUS} — which both labels the
+   * commit and drives a guaranteed one-tile lunge this tick (see
+   * {@link stepEnemy}). Exposed so the renderer/HUD can react to a charging
+   * swarm (prd §9 juice, later).
    */
   phase: 'advance' | 'charge';
 }
@@ -78,13 +80,14 @@ export interface EnemyStep {
 }
 
 /**
- * Greedily pick the next cell toward `target` from `from`, preferring a
- * diagonal but degrading to whichever single axis is walkable when the diagonal
- * or one component is blocked — so a wall corner deflects an enemy along it
- * instead of freezing it. Returns `from` unchanged when no nearer cell is
- * walkable. Charging skips the per-axis fallback: a charge that hits a wall
- * stops at it (the commitment is the point), still trying the pure axes so it
- * can slide toward the player rather than stall outright.
+ * Greedily pick the next cell toward `target` from `from`: try the full
+ * diagonal/orthogonal step first, and if that cell is blocked, slide along
+ * whichever single axis still closes distance — horizontal first, then
+ * vertical — so a wall corner deflects an enemy along it instead of freezing
+ * it. Returns `from` unchanged when already on the target or when no nearer
+ * cell is walkable. Phase-agnostic: both `advance` and `charge` use the same
+ * slide here; charge's commitment is expressed as a guaranteed lunge in
+ * {@link stepEnemy}, not by changing cell selection.
  */
 function nextCell(
   from: Vec2,
@@ -117,15 +120,28 @@ function nextCell(
 /**
  * Advance one enemy by one tick of `dt` seconds toward `target`.
  *
- * Banks `enemy.speed * dt` into the move budget, then spends whole tiles of
- * budget stepping greedily toward the player (multiple cells in one tick for a
- * fast enemy, none for a slow one whose budget hasn't reached 1 yet). The phase
- * is recomputed from the **post-move** proximity so a swarm that closes inside
- * {@link CHARGE_RADIUS} this tick is already marked `charge`.
+ * The **phase** is decided up front from the enemy's **pre-move** Chebyshev
+ * distance to `target`: `charge` if it is already within {@link CHARGE_RADIUS},
+ * otherwise `advance`. The decision is made before moving so it can drive *this*
+ * tick's motion rather than merely describe its outcome.
  *
- * A non-finite or non-positive `dt` banks nothing and the enemy holds station —
- * the budget is never poisoned to `NaN` (which would freeze the enemy forever,
- * `NaN >= 1` being false). Pure: `enemy` and `ai` are never mutated.
+ * Movement has two parts:
+ * 1. **Budgeted stepping (both phases).** Banks `enemy.speed * dt` into the
+ *    move budget, then spends whole tiles of budget stepping greedily toward
+ *    the player — multiple cells in one tick for a fast enemy, none for a slow
+ *    one whose budget hasn't reached 1 yet.
+ * 2. **The charge lunge (charge phase only).** While charging, the enemy
+ *    commits to a guaranteed single step toward the player this tick *even if*
+ *    the budget hasn't reached a whole tile — so a slow brute that would
+ *    otherwise just bank sub-tile budget instead presses in one tile per tick
+ *    once you're in range. The lunge consumes up to one tile of budget but
+ *    clamps at 0 (it never drives the budget negative); if budgeted stepping
+ *    already moved this tick, the lunge is a no-op (no double-step).
+ *
+ * A non-finite or non-positive `dt` banks nothing, lunges not, and the enemy
+ * holds station — the budget is never poisoned to `NaN` (which would freeze the
+ * enemy forever, `NaN >= 1` being false). Pure: `enemy` and `ai` are never
+ * mutated.
  */
 export function stepEnemy(
   enemy: Enemy,
@@ -134,9 +150,14 @@ export function stepEnemy(
   isWalkable: (x: number, y: number) => boolean,
   dt: number,
 ): EnemyStep {
-  const gained = Number.isFinite(dt) && dt > 0 ? enemy.speed * dt : 0;
+  const live = Number.isFinite(dt) && dt > 0;
+  const phase: EnemyAi['phase'] =
+    chebyshev(enemy.pos, target) <= CHARGE_RADIUS ? 'charge' : 'advance';
+
+  const gained = live ? enemy.speed * dt : 0;
   let budget = ai.moveBudget + gained;
   let pos: Vec2 = { x: enemy.pos.x, y: enemy.pos.y };
+  let stepped = false;
 
   // Spend whole tiles of budget, stepping toward the player each one. Stop
   // early if a step makes no progress (walled in) so the budget banks rather
@@ -146,11 +167,21 @@ export function stepEnemy(
     if (next.x === pos.x && next.y === pos.y) break;
     pos = next;
     budget -= 1;
+    stepped = true;
     if (pos.x === target.x && pos.y === target.y) break;
   }
 
-  const phase: EnemyAi['phase'] =
-    chebyshev(pos, target) <= CHARGE_RADIUS ? 'charge' : 'advance';
+  // Charge lunge: when in range and alive this tick, guarantee one step even on
+  // a sub-tile budget — but only if budgeted stepping didn't already move us
+  // (no double-step) and the cell is actually reachable. Clamp the budget at 0
+  // so the lunge can borrow at most a partial tile, never going negative.
+  if (live && phase === 'charge' && !stepped) {
+    const next = nextCell(pos, target, isWalkable);
+    if (next.x !== pos.x || next.y !== pos.y) {
+      pos = next;
+      budget = Math.max(0, budget - 1);
+    }
+  }
 
   return {
     enemy: { ...enemy, pos },

@@ -101,6 +101,28 @@ describe('stepEnemy — charge within the proximity threshold', () => {
     const { ai } = stepEnemy(enemy, createEnemyAi(), { x: 0, y: 0 }, open, 0);
     expect(ai.phase).toBe('advance');
   });
+
+  it('lunges one tile on a sub-tile budget when charging, but banks when far', () => {
+    // brute speed 2 over one 15 Hz tick banks only ~0.133 tiles — well under a
+    // whole tile — so without the lunge it would not move at all this tick.
+    const player: Vec2 = { x: 0, y: 0 };
+
+    // In charge range (pre-move Chebyshev dist = CHARGE_RADIUS): it must press
+    // in by a full tile in this single tick despite the sub-tile budget.
+    const near = createEnemy('brute', { x: CHARGE_RADIUS, y: 0 });
+    const lunged = stepEnemy(near, createEnemyAi(), player, open, TICK);
+    expect(lunged.ai.phase).toBe('charge');
+    expect(lunged.enemy.pos.x).toBe(CHARGE_RADIUS - 1); // moved one tile in
+    expect(lunged.ai.moveBudget).toBe(0); // lunge clamps the budget, never negative
+
+    // Beyond charge range with the same sub-tile budget: it advances, so it
+    // banks this tick and does NOT move — contrasting the two phases.
+    const far = createEnemy('brute', { x: CHARGE_RADIUS + 1, y: 0 });
+    const banked = stepEnemy(far, createEnemyAi(), player, open, TICK);
+    expect(banked.ai.phase).toBe('advance');
+    expect(banked.enemy.pos).toEqual({ x: CHARGE_RADIUS + 1, y: 0 }); // held station
+    expect(banked.ai.moveBudget).toBeGreaterThan(0); // budget banked for later
+  });
 });
 
 describe('stepEnemy — walls and walkability', () => {
