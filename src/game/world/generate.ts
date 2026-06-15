@@ -65,9 +65,7 @@ export function generateWorld(
     );
   }
   if (!Number.isInteger(seed)) {
-    throw new RangeError(
-      `generateWorld: seed must be an integer, got ${seed}`,
-    );
+    throw new RangeError(`generateWorld: seed must be an integer, got ${seed}`);
   }
 
   RNG.setSeed(seed);
