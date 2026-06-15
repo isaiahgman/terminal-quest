@@ -65,13 +65,13 @@ export class Rng {
     if (items.length === 0) {
       throw new RangeError('pick requires a non-empty array');
     }
-    // rot.js `getItem` only reads the array; the cast bridges its mutable-array
-    // parameter type. It returns null solely for an empty array (handled above),
-    // and the explicit guard narrows `T | null` to `T` without an assertion.
-    const item = this.rng.getItem(items as T[]);
-    if (item === null) {
-      throw new RangeError('pick requires a non-empty array');
-    }
-    return item;
+    // Index directly rather than via rot.js `getItem`: getItem returns `null`
+    // for BOTH an empty array and a picked element that is itself `null`, so it
+    // would corrupt `pick<T | null>`. The draw is identical to getItem's
+    // (`Math.floor(getUniform() * length)`). The index is in [0, length) by
+    // construction; `noUncheckedIndexedAccess` widens the element to `T | undefined`,
+    // so assert the proven invariant rather than runtime-checking (which would
+    // mishandle a legitimately stored `undefined`).
+    return items[this.nextInt(items.length)] as T;
   }
 }

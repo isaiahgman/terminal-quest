@@ -107,4 +107,70 @@ describe('Rng', () => {
     const rng = new Rng(1);
     expect(() => rng.pick([])).toThrow(RangeError);
   });
+
+  it('pick returns a legitimately stored null element (does not treat it as empty)', () => {
+    // Regression: rot.js getItem returns null for both an empty array and a
+    // picked null slot; pick must not conflate the two.
+    const rng = new Rng(1);
+    expect(rng.pick([null, null, null])).toBeNull();
+  });
+
+  it('pick eventually returns every element', () => {
+    const rng = new Rng(123);
+    const items = ['a', 'b', 'c', 'd'] as const;
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      seen.add(rng.pick(items));
+    }
+    expect(seen).toEqual(new Set(items));
+  });
+
+  it('nextInt(1) always returns 0 (half-open boundary)', () => {
+    for (let seed = 0; seed < 50; seed++) {
+      expect(new Rng(seed).nextInt(1)).toBe(0);
+    }
+  });
+
+  it('coerces the seed to an unsigned 32-bit integer', () => {
+    // Negative and fractional seeds must reproduce the uint32 stream, per the
+    // documented `seed >>> 0` contract.
+    expect(new Rng(-3).nextFloat()).toBe(new Rng(-3 >>> 0).nextFloat());
+    expect(new Rng(1.9).nextFloat()).toBe(new Rng(1).nextFloat());
+  });
+
+  it('pins the exact stream for a fixed seed (golden / generator-swap guard)', () => {
+    // Locks the seed→stream mapping to rot.js's Alea output. A different test —
+    // comparing two in-process instances — would pass even if the generator were
+    // swapped, since both instances would change together. These literals would
+    // not. If rot.js changes its algorithm, this fails loudly (every save desyncs).
+    const floats = new Rng(12345);
+    expect([
+      floats.nextFloat(),
+      floats.nextFloat(),
+      floats.nextFloat(),
+      floats.nextFloat(),
+      floats.nextFloat(),
+    ]).toEqual([
+      0.01198604702949524, 0.8647531978785992, 0.6391114671714604,
+      0.4838599886279553, 0.5140634323470294,
+    ]);
+
+    const ints = new Rng(42);
+    expect(Array.from({ length: 10 }, () => ints.nextInt(100))).toEqual([
+      2, 73, 8, 17, 79, 58, 90, 26, 81, 76,
+    ]);
+
+    const picks = new Rng(7);
+    const options = ['a', 'b', 'c', 'd'] as const;
+    expect(Array.from({ length: 8 }, () => picks.pick(options))).toEqual([
+      'a',
+      'b',
+      'a',
+      'b',
+      'b',
+      'b',
+      'd',
+      'b',
+    ]);
+  });
 });
