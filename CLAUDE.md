@@ -33,7 +33,7 @@ Keep combat/progression math in pure, tested modules (`combat.ts`, `progression.
 1. **Branch + worktree** — `git worktree add ../terminal-quest-pr-005 -b pr-005-<slug>` and work there (isolated from main).
 2. **Pick the planning artifact** — `docs/plan/PR-005-*.md`.
 3. **Breakdown / context-collection stage** — before coding: read the artifact + its `Depends on` PRs + the PRD/TDD sections it links + the existing code it touches. Restate the goal, list files to change, confirm the Acceptance boxes are objectively checkable, surface unknowns.
-4. **Implement** to the acceptance criteria; run `pnpm typecheck` + `pnpm test`.
+4. **Implement** to the acceptance criteria; run `npm run check` (typecheck + lint + test) — must be green.
 5. **Commit** on the branch (co-author trailer) and push the **branch** (never `main`).
 6. **Open a PR** via the GitHub MCP. PR body format is exactly:
    ```

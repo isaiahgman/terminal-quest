@@ -18,7 +18,7 @@ A running log of the meaningful choices and the lessons learned building Termina
 - **npm, not pnpm** — corepack's pnpm didn't activate on this machine; lockfile is `package-lock.json`.
 
 ## Process lessons (carry to the next project)
-- **Scope planning artifacts SMALLER.** Ours each map to ~3–5 real PRs. Keep PRs tiny; one artifact → several small PRs; never combine artifacts; never ship a massive PR. (Mistake made & corrected: combining PR-002+003 into one PR.)
+- **Scope planning artifacts SMALLER.** Ours each map to ~3–5 real PRs. Keep PRs tiny; one artifact → several small PRs; never combine artifacts; never ship a massive PR. (We combined PR-002+003 once — defensible as the first interactive milestone, but the lesson is to scope artifacts so one maps to one tiny PR.)
 - **Strictest tooling, no hacks.** Fix the code, not the linter. No `eslint-disable`/`@ts-ignore`/`any`/speculative-unused code. (Mistake made & corrected: an eslint rule override to dodge an unused param.)
 - **Isaiah merges every PR.** Agents open PRs and stop.
 - **Stacked-PR footgun:** merging a PR and deleting its base branch auto-closes child PRs. So **base every PR on `main`**; build one → merge → next.
