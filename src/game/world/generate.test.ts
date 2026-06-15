@@ -56,16 +56,26 @@ function reachableFloorCount(world: World): number {
 }
 
 describe('generateWorld', () => {
-  it('is deterministic: same seed produces an identical map', () => {
-    const a = generateWorld(100, 50, 12345);
-    const b = generateWorld(100, 50, 12345);
-    expect(a).toEqual(b);
-    // Interleaving an unrelated generation must not perturb determinism, since
-    // rot.js' RNG is global module state.
-    generateWorld(64, 64, 999);
-    const c = generateWorld(100, 50, 12345);
-    expect(c).toEqual(a);
-  });
+  // Seed 0 is included deliberately: rot.js' RNG transforms any seed `< 1`, so a
+  // falsy-seed regression (e.g. `setSeed(seed || fallback)`) would corrupt
+  // reproducibility for seed 0 specifically — the value the save system is most
+  // likely to hit — while leaving a truthy seed like 12345 green.
+  it.each([0, 1, 12345])(
+    'is deterministic: seed %i produces an identical map',
+    (seed) => {
+      const a = generateWorld(100, 50, seed);
+      const b = generateWorld(100, 50, seed);
+      expect(b).toEqual(a);
+      // A fresh World each call — distinct array instances, not an aliased
+      // reference (the docstring promises a non-shared return).
+      expect(b.tiles).not.toBe(a.tiles);
+      // Interleaving an unrelated generation must not perturb determinism, since
+      // rot.js' RNG is global module state.
+      generateWorld(64, 64, 999);
+      const c = generateWorld(100, 50, seed);
+      expect(c).toEqual(a);
+    },
+  );
 
   it('different seeds produce different maps', () => {
     const a = generateWorld(100, 50, 1);
@@ -136,6 +146,19 @@ describe('generateWorld', () => {
       [10, NaN],
     ] as const) {
       expect(() => generateWorld(w, h, 1)).toThrow(RangeError);
+    }
+  });
+
+  it('rejects non-integer seeds that would silently alias', () => {
+    // rot.js maps any seed `< 1` through `1/seed`, so these alias each other
+    // (and 0/NaN/Infinity collapse to one stream). Reject them up front so the
+    // saved-seed → world mapping stays injective.
+    for (const seed of [1.5, -0.5, NaN, Infinity, -Infinity]) {
+      expect(() => generateWorld(100, 50, seed)).toThrow(RangeError);
+    }
+    // Integer seeds — including 0 and negatives — remain valid.
+    for (const seed of [0, -7, 12345]) {
+      expect(() => generateWorld(20, 20, seed)).not.toThrow();
     }
   });
 });

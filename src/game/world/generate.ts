@@ -40,6 +40,11 @@ const SMOOTHING_PASSES = 4;
  * or non-finite dimensions throw (left unchecked, rot.js either crashes or — for
  * `Infinity` — loops unbounded and exhausts memory).
  *
+ * `seed` must be an integer. rot.js maps any seed `< 1` through `1/seed` before
+ * use, so non-integer seeds alias (`0`, `NaN`, and `Infinity` all collapse to
+ * the same stream, and `s` collides with `1/s`). Requiring an integer keeps the
+ * seed→world mapping injective for the values we actually save (PR-012 resume).
+ *
  * Guarantees (covered by tests): identical output for identical seed, every
  * `'floor'` tile reachable from every other (no isolated pockets), exact
  * `width`×`height` dimensions, and only valid `Tile` values.
@@ -57,6 +62,11 @@ export function generateWorld(
   ) {
     throw new RangeError(
       `generateWorld: width and height must be positive integers, got ${width}×${height}`,
+    );
+  }
+  if (!Number.isInteger(seed)) {
+    throw new RangeError(
+      `generateWorld: seed must be an integer, got ${seed}`,
     );
   }
 
