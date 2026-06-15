@@ -12,6 +12,7 @@
   "engines": {
     "node": ">=18"
   },
+  "packageManager": "npm@11.12.1",
   "scripts": {
     "dev": "tsx src/cli.ts",
     "clean": "rimraf dist",
