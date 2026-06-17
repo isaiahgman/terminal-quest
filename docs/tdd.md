@@ -52,13 +52,14 @@ src/
 
 ## 5. State model
 - `GameState = { player, enemies[], pickups[], bosses[], world, camera, base, status, bossesDefeated, rngSeed }`
-- `Player = { pos, hp, maxHp, stamina, maxStamina, level, xp, weapon, damage, ... }`
-- `Enemy = { kind, pos, hp, maxHp, atk, speed, glyph, color, aiState* }`  ·  `Boss = Enemy + { id, name, defeated }`  (*`aiState` lands with the AI slice; `glyph`/`color` are plain strings the renderer maps — see §12)
+- `Player = { pos, hp, maxHp, stamina, maxStamina, level, xp, weapon, damage, def, ... }`  (`def` mitigates enemy-contact damage — the player is a `def` target)
+- `Enemy = { kind, pos, hp, maxHp, atk, def, speed, glyph, color, aiState* }`  ·  `Boss = Enemy + { id, name, defeated }`  (*`aiState` lands with the AI slice; `glyph`/`color` are plain strings the renderer maps — see §12)
 - `World = { tiles, width, height, seed }`  ·  `Camera = { x, y, viewW, viewH }`
 - `Pickup = { pos, kind: 'weapon' | ... , payload }`
 
 ## 6. Combat model
 - **Radius attack:** given player pos + attack type `{ radius, damage, staminaCost, hitChance }`, find enemies within radius, roll `hitChance` per enemy, apply damage. Pure fn in `combat.ts`.
+- **Damage formula:** `damage = max(1, attack.damage + attacker.atk - target.def)` — clamped to ≥1 so a landed hit always stings; `def` mitigates.
 - **Stamina:** cost on attack; regen per tick; gate attacks when empty.
 - **Enemy contact:** enemies overlapping/adjacent deal damage to the player per tick.
 - Fully deterministic via injected seeded RNG (so balance is testable).
