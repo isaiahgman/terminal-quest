@@ -115,6 +115,10 @@ function main(): void {
     console.error(err);
     shutdown(1);
   });
+  process.on('unhandledRejection', (reason: unknown) => {
+    console.error(reason);
+    shutdown(1);
+  });
 
   runLoop(state, {
     drainIntents: () => input.drain(),
