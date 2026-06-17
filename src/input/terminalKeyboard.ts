@@ -55,26 +55,42 @@ function setRawMode(stdin: InStream, on: boolean): void {
   if (stdin.isTTY) stdin.setRawMode(on);
 }
 
-function probeKittySupport(io: KeyboardIo): Promise<boolean> {
+interface ProbeResult {
+  supported: boolean;
+  /** Keystroke bytes that arrived after the reply, to replay into the decoder. */
+  leftover: string;
+}
+
+function probeKittySupport(io: KeyboardIo): Promise<ProbeResult> {
   return new Promise((resolve) => {
     let buffer = '';
     let settled = false;
 
-    const finish = (supported: boolean): void => {
+    const finish = (supported: boolean, leftover: string): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       io.stdin.off('data', onData);
-      resolve(supported);
+      resolve({ supported, leftover });
     };
 
     const onData = (chunk: Buffer): void => {
       buffer += chunk.toString('latin1');
-      if (KITTY_REPLY.test(buffer)) finish(true);
-      else if (DA_REPLY.test(buffer)) finish(false);
+      // Bytes after the reply are real keystrokes (typed during the probe) —
+      // hand them back so the first keystroke isn't swallowed. Any trailing DA
+      // reply in there is harmless: the decoder ignores `CSI … c`.
+      const kitty = KITTY_REPLY.exec(buffer);
+      if (kitty) {
+        finish(true, buffer.slice(kitty.index + kitty[0].length));
+        return;
+      }
+      const da = DA_REPLY.exec(buffer);
+      if (da) finish(false, buffer.slice(da.index + da[0].length));
     };
 
-    const timer = setTimeout(() => finish(false), PROBE_TIMEOUT_MS);
+    // No response at all (legacy terminal) → unsupported; surface whatever was
+    // typed during the wait so it still reaches the game.
+    const timer = setTimeout(() => finish(false, buffer), PROBE_TIMEOUT_MS);
     io.stdin.on('data', onData);
     io.stdout.write(PROBE);
   });
@@ -92,7 +108,7 @@ export async function startKeyboard(
   setRawMode(io.stdin, true);
   io.stdin.resume();
 
-  const protocolEnabled = await probeKittySupport(io);
+  const { supported: protocolEnabled, leftover } = await probeKittySupport(io);
   if (protocolEnabled) {
     io.stdout.write(ENABLE);
     input.useReleaseEvents();
@@ -103,6 +119,11 @@ export async function startKeyboard(
     for (const event of decoder.decode(chunk)) input.apply(event);
   };
   io.stdin.on('data', onData);
+
+  // Replay any keystrokes that arrived during the probe (after its reply).
+  if (leftover !== '') {
+    for (const event of decoder.decode(leftover)) input.apply(event);
+  }
 
   let restored = false;
   return {

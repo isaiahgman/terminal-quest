@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import type { Intent } from '../game/update.js';
 import type { KeyEvent } from './keyDecoder.js';
+import { ATTACK_KEYS } from '../data/attacks.js';
 
 /**
  * How long (ms) a direction stays "held" after its most recent key event —
@@ -25,6 +26,25 @@ import type { KeyEvent } from './keyDecoder.js';
  * direction immediately and there is no coast.
  */
 export const HELD_WINDOW_MS = 300;
+
+/**
+ * Safety net (ms) for the **release tier** only: the longest a direction may
+ * stay held without *any* fresh event (press/repeat) before it is force-expired.
+ *
+ * The release tier trusts real key-up events, but a key-up can be lost — most
+ * commonly when the window **loses focus while a key is held** (alt-tab away):
+ * the terminal sends no release, so without this the player would return moving
+ * forever. The kitty protocol streams `repeat` events while a key is physically
+ * held, so a genuinely-held direction keeps refreshing its timestamp and never
+ * trips this; only a direction whose stream has gone silent (focus lost) does.
+ *
+ * It must sit **above the OS initial-repeat delay** (the gap between the first
+ * press and the first repeat, up to ~660 ms on old X11) so a normally-held key
+ * isn't expired during that pre-repeat lull — hence 1 s, comfortably clear of
+ * it. The cost is that a lost release coasts ≤ 1 s before auto-recovering,
+ * versus the instant stop of a real release.
+ */
+export const RELEASE_SAFETY_NET_MS = 1000;
 
 type Direction = 'up' | 'down' | 'left' | 'right';
 
@@ -59,15 +79,23 @@ function isQuit(name: string): boolean {
  *    held for {@link HELD_WINDOW_MS} after its last event and `drain()` expires
  *    the stale ones. Bridges the OS initial-repeat gap at the cost of a coast.
  *  - **Release tier (kitty protocol):** real press/repeat/**release** events
- *    arrive; {@link useReleaseEvents} switches off the timeout so a release
- *    removes its direction at once — crisp switching, no coast.
+ *    arrive; {@link useReleaseEvents} switches expiry to the long
+ *    {@link RELEASE_SAFETY_NET_MS} backstop so a release removes its direction
+ *    at once — crisp switching, no coast — while a lost key-up still recovers.
  *
- * Either way `drain()` (once per tick) emits one move intent per still-held
- * direction, so cadence is the game's tick, never the OS key-repeat rate. The
- * clock is injected so the timing is unit-testable.
+ * Movement is held state (re-emitted every tick); **attacks are one-shot** —
+ * each press queues a single intent that fires once on the next `drain()`. Both
+ * cross into the sim only as `Intent`s, keeping `update()` pure.
  */
 export class Input {
   private readonly held = new Map<Direction, number>();
+  /**
+   * Attack intents pressed since the last drain. Unlike movement, attacks are
+   * one-shot — a press is a single swing, not a held state — so they queue here
+   * and are emitted (and cleared) once. Mashing queues several; the stamina gate
+   * in `update()`, not this layer, is what limits the mash.
+   */
+  private attackIntents: Intent[] = [];
   private quitRequested = false;
   private releaseDriven = false;
   private readonly now: () => number;
@@ -77,8 +105,9 @@ export class Input {
   }
 
   /**
-   * Switch to release-driven mode: directions are removed on a real key-up
-   * rather than by timeout. Call this once when the kitty protocol is active.
+   * Switch to release-driven mode: directions are removed on a real key-up and
+   * expiry relaxes to the {@link RELEASE_SAFETY_NET_MS} backstop. Call this once
+   * when the kitty protocol is active.
    */
   useReleaseEvents(): void {
     this.releaseDriven = true;
@@ -108,31 +137,41 @@ export class Input {
       // makes "last pressed wins" actually true.
       this.held.delete(dir);
       this.held.set(dir, this.now());
+      return;
+    }
+    const attackId = ATTACK_KEYS[name];
+    if (attackId !== undefined) {
+      this.attackIntents.push({ type: 'attack', attackId });
     }
   }
 
   private onRelease(name: string): void {
-    if (isQuit(name)) return; // releasing q / Ctrl-C is a no-op
+    // Only movement holds care about release; quit and one-shot attacks don't.
     const dir = KEY_TO_DIRECTION[name];
     if (dir !== undefined) this.held.delete(dir);
   }
 
   /**
-   * Emit one move intent per still-held direction. In the timeout tier this
-   * also expires directions whose last event is older than the window; in the
-   * release tier expiry is driven by real key-up events instead.
+   * Emit one move intent per still-held direction, then any attack intents
+   * pressed since the last drain. Stale directions expire after the active
+   * window — {@link HELD_WINDOW_MS} in the timeout tier, the long
+   * {@link RELEASE_SAFETY_NET_MS} backstop in the release tier (where real
+   * key-up normally removes them first). Attacks fire exactly once.
    */
   drain(): Intent[] {
     const now = this.now();
+    const expiry = this.releaseDriven ? RELEASE_SAFETY_NET_MS : HELD_WINDOW_MS;
     const intents: Intent[] = [];
     for (const [dir, lastSeen] of this.held) {
-      if (!this.releaseDriven && now - lastSeen > HELD_WINDOW_MS) {
+      if (now - lastSeen > expiry) {
         this.held.delete(dir);
         continue;
       }
       const delta = DIRECTION_DELTA[dir];
       intents.push({ type: 'move', dx: delta.dx, dy: delta.dy });
     }
+    intents.push(...this.attackIntents);
+    this.attackIntents = [];
     return intents;
   }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Input, HELD_WINDOW_MS } from './input.js';
+import { Input, HELD_WINDOW_MS, RELEASE_SAFETY_NET_MS } from './input.js';
 import type { KeyKind } from './keyDecoder.js';
 
 /**
@@ -129,6 +129,44 @@ describe('Input — timeout tier (no release events)', () => {
   });
 });
 
+describe('Input — attacks (one-shot)', () => {
+  it('maps the attack keys to one-shot attack intents', () => {
+    const cases: Array<[string, string]> = [
+      ['j', 'quick-jab'],
+      ['k', 'wide-cleave'],
+      ['l', 'whirling-maelstrom'],
+    ];
+
+    for (const [key, attackId] of cases) {
+      const { input, press } = makeInput();
+      press(key);
+      expect(input.drain()).toEqual([{ type: 'attack', attackId }]);
+    }
+  });
+
+  it('fires an attack exactly once — not re-emitted next tick like a held move', () => {
+    const { input, press, advance } = makeInput();
+
+    press('j');
+    expect(input.drain()).toEqual([{ type: 'attack', attackId: 'quick-jab' }]);
+    // No re-press: unlike a held direction, the attack does not repeat next tick.
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([]);
+  });
+
+  it('emits a held move and a queued attack together in one drain', () => {
+    const { input, press, advance } = makeInput();
+
+    press('RIGHT');
+    press('k');
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([
+      { type: 'move', dx: 1, dy: 0 },
+      { type: 'attack', attackId: 'wide-cleave' },
+    ]);
+  });
+});
+
 describe('Input — release tier (kitty protocol)', () => {
   it('removes a direction immediately on key-up, with no coast', () => {
     const { input, press, release, advance, useReleaseEvents } = makeInput();
@@ -143,14 +181,30 @@ describe('Input — release tier (kitty protocol)', () => {
     expect(input.drain()).toEqual([]); // gone at once — no HELD_WINDOW coast
   });
 
-  it('keeps moving indefinitely on a single press without any timeout expiry', () => {
-    const { input, press, advance, useReleaseEvents } = makeInput();
+  it('a key kept alive by repeat events moves on past the safety net', () => {
+    const { input, press, repeat, advance, useReleaseEvents } = makeInput();
     useReleaseEvents();
 
     press('UP');
-    // No further events and no release: far past the timeout window, still held.
-    advance(HELD_WINDOW_MS * 10);
-    expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: -1 }]);
+    // Repeats (event type 2) stream while physically held; each refreshes the
+    // hold, so movement continues well past RELEASE_SAFETY_NET_MS with no coast.
+    for (let elapsed = 0; elapsed < RELEASE_SAFETY_NET_MS * 3; elapsed += 100) {
+      advance(100);
+      expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: -1 }]);
+      repeat('UP');
+    }
+  });
+
+  it('recovers from a lost release (focus loss): expires at the safety net', () => {
+    const { input, press, advance, useReleaseEvents } = makeInput();
+    useReleaseEvents();
+
+    press('UP'); // held, then focus is lost — no repeats, no release ever arrives
+    advance(RELEASE_SAFETY_NET_MS);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: -1 }]); // still held at the window
+
+    advance(1);
+    expect(input.drain()).toEqual([]); // force-expired — no "moving forever"
   });
 
   it('switches direction crisply: releasing up while pressing right yields only right', () => {

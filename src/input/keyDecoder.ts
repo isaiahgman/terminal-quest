@@ -8,17 +8,20 @@
  * layer owns stdin and parses the sequences itself; this module is that parser,
  * kept pure (bytes in → events out) so it is unit-testable without a terminal.
  *
- * It handles exactly the keys the game uses (movement + quit); anything else —
- * other CSI sequences, query responses, mouse — is ignored, not mis-fired.
+ * It is **policy-free**: it emits a named event for every printable key, the
+ * arrows, and Ctrl-C — and lets {@link Input} decide which ones are movement,
+ * attacks, or quit. (So adding a keybinding never touches the decoder.) It
+ * handles three forms: the kitty `CSI u` form, the legacy CSI form (`CSI A`),
+ * and the SS3 form (`ESC O A`, application-cursor-key mode).
  */
 
 /** Press = key went down, repeat = OS auto-repeat, release = key came up. */
 export type KeyKind = 'press' | 'repeat' | 'release';
 
 /**
- * A logical key event. `name` uses the same vocabulary the rest of the input
- * layer already speaks (`'UP'`/`'DOWN'`/`'LEFT'`/`'RIGHT'`, the WASD letters,
- * `'q'`, `'CTRL_C'`) so {@link Input} can consume it unchanged.
+ * A logical key event. `name` is the arrow name (`'UP'`/`'DOWN'`/`'LEFT'`/
+ * `'RIGHT'`), `'CTRL_C'`, or the literal character for a printable key (`'w'`,
+ * `'j'`, `'q'`, …) — the vocabulary {@link Input}'s key maps already speak.
  */
 export interface KeyEvent {
   name: string;
@@ -28,23 +31,19 @@ export interface KeyEvent {
 const ESC = 0x1b;
 const CSI_FINAL_MIN = 0x40; // '@' — CSI sequences end on a byte in 0x40..0x7e
 const CSI_FINAL_MAX = 0x7e; // '~'
+const CTRL_C_BYTE = 0x03;
+const C_CODEPOINT = 99; // 'c' — becomes CTRL_C only with the Ctrl modifier
 
-/** Unicode codepoints for the printable keys we care about. */
-const CODEPOINT_TO_NAME: Record<number, string> = {
-  119: 'w',
-  97: 'a',
-  115: 's',
-  100: 'd',
-  113: 'q',
-  99: 'c', // only meaningful with the Ctrl modifier → CTRL_C
-};
+function isPrintableAscii(codepoint: number): boolean {
+  return codepoint >= 0x20 && codepoint <= 0x7e;
+}
 
 /**
  * Functional-key codepoints kitty uses for the arrows when "report all keys as
  * escape codes" is set. Terminals *may* instead send the legacy letter form
- * (`CSI 1 ; mods : event A`), which {@link arrowFromFinalByte} covers — both are
- * decoded. If a terminal reports different codepoints, this is the one knob to
- * adjust (confirm with the capture script).
+ * (`CSI 1 ; mods : event A`) or SS3 (`ESC O A`), which {@link arrowFromFinalByte}
+ * covers — all three are decoded. If a terminal reports different codepoints,
+ * this is the one knob to adjust (confirm with the capture script).
  */
 const ARROW_CODEPOINT_TO_NAME: Record<number, string> = {
   57297: 'UP',
@@ -53,7 +52,7 @@ const ARROW_CODEPOINT_TO_NAME: Record<number, string> = {
   57300: 'LEFT',
 };
 
-/** Legacy / letter-terminated arrows: `CSI A/B/C/D` (optionally with params). */
+/** Letter-terminated arrows: `CSI A/B/C/D` and SS3 `ESC O A/B/C/D`. */
 function arrowFromFinalByte(final: string): string | undefined {
   switch (final) {
     case 'A':
@@ -112,8 +111,7 @@ function decodeCsi(params: string, final: string): KeyEvent | undefined {
 
   const groups = parseParams(params);
   const modifiers = groups[1]?.[0] ?? 1;
-  const eventType = groups[1]?.[1];
-  const kind = kindFromEventType(eventType);
+  const kind = kindFromEventType(groups[1]?.[1]);
 
   if (final === 'u') {
     const codepoint = groups[0]?.[0];
@@ -122,12 +120,13 @@ function decodeCsi(params: string, final: string): KeyEvent | undefined {
     const arrow = ARROW_CODEPOINT_TO_NAME[codepoint];
     if (arrow !== undefined) return { name: arrow, kind };
 
-    const name = CODEPOINT_TO_NAME[codepoint];
-    if (name === undefined) return undefined;
-    if (name === 'c') {
-      return hasCtrl(modifiers) ? { name: 'CTRL_C', kind } : undefined;
+    if (codepoint === C_CODEPOINT && hasCtrl(modifiers)) {
+      return { name: 'CTRL_C', kind };
     }
-    return { name, kind };
+    if (isPrintableAscii(codepoint)) {
+      return { name: String.fromCharCode(codepoint), kind };
+    }
+    return undefined;
   }
 
   const arrow = arrowFromFinalByte(final);
@@ -157,7 +156,7 @@ export class KeyDecoder {
 
       // Raw Ctrl-C (0x03) — still emitted by terminals without the protocol, and
       // a safe belt-and-braces even with it.
-      if (byte === 0x03) {
+      if (byte === CTRL_C_BYTE) {
         events.push({ name: 'CTRL_C', kind: 'press' });
         i += 1;
         continue;
@@ -165,13 +164,23 @@ export class KeyDecoder {
 
       if (byte === ESC) {
         if (i + 1 >= buf.length) break; // need at least the next byte
+
+        // SS3 application-cursor-key arrows: ESC O A/B/C/D.
+        if (buf[i + 1] === 'O') {
+          if (i + 2 >= buf.length) break; // incomplete — wait for the final byte
+          const arrow = arrowFromFinalByte(buf.charAt(i + 2));
+          if (arrow !== undefined) events.push({ name: arrow, kind: 'press' });
+          i += 3;
+          continue;
+        }
+
         if (buf[i + 1] !== '[') {
-          // Not a CSI sequence we handle (lone ESC, alt-combo) — skip the ESC.
+          // Not a sequence we handle (lone ESC, alt-combo) — skip the ESC.
           i += 1;
           continue;
         }
 
-        // Scan params until the CSI final byte (0x40..0x7e).
+        // CSI: scan params until the final byte (0x40..0x7e).
         let j = i + 2;
         while (
           j < buf.length &&
@@ -183,17 +192,15 @@ export class KeyDecoder {
         if (j >= buf.length) break; // incomplete sequence — wait for more bytes
 
         const params = buf.slice(i + 2, j);
-        const final = buf.charAt(j);
-        const event = decodeCsi(params, final);
+        const event = decodeCsi(params, buf.charAt(j));
         if (event !== undefined) events.push(event);
         i = j + 1;
         continue;
       }
 
       // Plain printable byte (terminals without the protocol send these directly).
-      const name = CODEPOINT_TO_NAME[byte];
-      if (name !== undefined && name !== 'c') {
-        events.push({ name, kind: 'press' });
+      if (isPrintableAscii(byte)) {
+        events.push({ name: String.fromCharCode(byte), kind: 'press' });
       }
       i += 1;
     }

@@ -1,10 +1,14 @@
 import terminalKit from 'terminal-kit';
 import {
   type GameState,
+  type LiveEnemy,
   type Vec2,
   type World,
+  createPlayer,
   isWalkable,
 } from './game/state.js';
+import { type EnemyKind, createEnemy } from './game/enemy.js';
+import { createEnemyAi } from './game/entities.js';
 import { generateWorld } from './game/world/generate.js';
 import { Rng } from './game/rng.js';
 import { runLoop } from './game/loop.js';
@@ -16,6 +20,36 @@ import {
 import { Renderer } from './render/renderer.js';
 
 const term = terminalKit.terminal;
+
+/** How many enemies to seed the world with, and the mix of kinds to draw from. */
+const ENEMY_COUNT = 8;
+const ENEMY_KINDS: readonly EnemyKind[] = ['grunt', 'runner', 'brute'];
+
+/**
+ * Scatter a handful of enemies on walkable ground, away from the player's spawn
+ * so the run doesn't open mid-swarm. Deterministic from the injected {@link Rng}
+ * (seeded off the world seed), like {@link pickSpawn}. Enemies may share a tile;
+ * tighter placement is a later concern (TQ-005 core).
+ */
+function spawnEnemies(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
+  const open: Vec2[] = [];
+  for (let y = 0; y < world.height; y++) {
+    for (let x = 0; x < world.width; x++) {
+      const far = Math.abs(x - player.x) + Math.abs(y - player.y) > 12;
+      if (far && isWalkable(world, x, y)) open.push({ x, y });
+    }
+  }
+  if (open.length === 0) return [];
+  const enemies: LiveEnemy[] = [];
+  for (let i = 0; i < ENEMY_COUNT; i++) {
+    const kind = ENEMY_KINDS[rng.nextInt(ENEMY_KINDS.length)]!;
+    enemies.push({
+      enemy: createEnemy(kind, rng.pick(open)),
+      ai: createEnemyAi(),
+    });
+  }
+  return enemies;
+}
 
 /**
  * Pick a walkable spawn tile deterministically. Draws from the injected
@@ -63,14 +97,19 @@ async function main(): Promise<void> {
   const worldSeed = Math.floor(Math.random() * 0x100000000);
   const world = generateWorld(term.width * 2, term.height * 2, worldSeed);
 
-  // Spawn on open ground, picked deterministically from the same seed.
-  const spawn = pickSpawn(world, new Rng(worldSeed));
+  // One RNG seeded off the world seed drives spawn placement; a second drives
+  // the live sim (attack rolls) so combat reproduces alongside the world.
+  const setupRng = new Rng(worldSeed);
+  const spawn = pickSpawn(world, setupRng);
   const state: GameState = {
     world,
-    player: { pos: spawn },
+    player: createPlayer(spawn),
+    enemies: spawnEnemies(world, spawn, setupRng),
+    tooTired: false,
     tick: 0,
   };
 
+  const simRng = new Rng(worldSeed ^ 0x9e3779b9);
   const renderer = new Renderer(term);
   const input = new Input();
 
@@ -80,6 +119,12 @@ async function main(): Promise<void> {
     console.error(err);
     shutdown(1);
   });
+  // Belt-and-braces: if a signal fires *during* startKeyboard's await (before
+  // `keyboard` is assigned, so shutdown's restore() is a no-op), this still
+  // turns raw mode back off so the shell isn't left unusable.
+  process.on('exit', () => {
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+  });
 
   // Negotiate the kitty keyboard protocol (real key-release → no coast) and
   // start feeding input. Falls back to the timeout model on terminals without
@@ -88,6 +133,7 @@ async function main(): Promise<void> {
 
   runLoop(state, {
     drainIntents: () => input.drain(),
+    rng: () => simRng.nextFloat(),
     render: (s) => renderer.render(s),
     shouldStop: () => input.shouldQuit,
     onStop: () => shutdown(0),
