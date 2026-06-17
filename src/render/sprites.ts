@@ -12,6 +12,10 @@ export interface Glyph {
 /**
  * Palette — the single source of truth for the game's visual identity.
  * Tune the look here; nothing else in the render layer hard-codes a colour.
+ *
+ * Frozen so each entry is a single shared, immutable instance: `glyphForTile`
+ * returns the same reference on every call (no per-cell allocation in the hot
+ * render path) and no caller can mutate the shared glyph.
  */
 const PALETTE = {
   /** Recessive dotted ground so the eye reads it as empty, walkable space. */
@@ -20,9 +24,9 @@ const PALETTE = {
   wall: { char: '▓', color: 'white', bg: 'brightBlack' },
   /** Deliberately the brightest thing on screen, so it is instantly findable. */
   player: { char: '@', color: 'brightYellow', bg: 'black' },
-} satisfies Record<string, Glyph>;
+} as const satisfies Record<string, Glyph>;
 
-export function glyphForTile(tile: Tile): Glyph {
+export function glyphForTile(tile: Tile): Readonly<Glyph> {
   switch (tile) {
     case 'floor':
       return PALETTE.floor;
@@ -32,7 +36,7 @@ export function glyphForTile(tile: Tile): Glyph {
 }
 
 /** The player's glyph — high-contrast against every tile background. */
-export const PLAYER_GLYPH: Glyph = PALETTE.player;
+export const PLAYER_GLYPH: Readonly<Glyph> = PALETTE.player;
 
 /**
  * Build a terminal-kit cell attribute from a glyph. `bgColor` is included only
