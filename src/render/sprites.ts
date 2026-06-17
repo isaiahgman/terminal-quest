@@ -33,3 +33,17 @@ export function glyphForTile(tile: Tile): Glyph {
 
 /** The player's glyph — high-contrast against every tile background. */
 export const PLAYER_GLYPH: Glyph = PALETTE.player;
+
+/**
+ * Build a terminal-kit cell attribute from a glyph. `bgColor` is included only
+ * when the glyph defines a background, so a bg-less glyph falls back to the
+ * terminal's default background (AC: backgrounds applied only when present).
+ */
+export function cellAttr(
+  g: Glyph,
+  bold: boolean,
+): { color: string; bold: boolean; bgColor?: string } {
+  return g.bg === undefined
+    ? { color: g.color, bold }
+    : { color: g.color, bold, bgColor: g.bg };
+}

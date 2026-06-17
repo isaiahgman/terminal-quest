@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Tile } from '../game/state.js';
-import { glyphForTile, PLAYER_GLYPH } from './sprites.js';
+import { cellAttr, glyphForTile, PLAYER_GLYPH } from './sprites.js';
 
-const ALL_TILES: readonly Tile[] = ['floor', 'wall'];
+// Compiler-enforced exhaustiveness: a Record<Tile, …> forces every Tile variant
+// to be listed, so adding a tile without updating this fails to typecheck rather
+// than silently skipping the new variant in the tests below.
+const TILE_PRESENCE: Record<Tile, true> = { floor: true, wall: true };
+const ALL_TILES = Object.keys(TILE_PRESENCE) as Tile[];
 
 describe('tileset palette', () => {
   it('maps every tile to a non-empty glyph with a foreground colour', () => {
@@ -34,5 +38,18 @@ describe('player glyph', () => {
   it('stands out from the tiles it walks over', () => {
     expect(PLAYER_GLYPH.color).not.toBe(glyphForTile('floor').color);
     expect(PLAYER_GLYPH.color).not.toBe(glyphForTile('wall').color);
+  });
+});
+
+describe('cellAttr', () => {
+  it('includes bgColor when the glyph defines a background', () => {
+    const attr = cellAttr({ char: '#', color: 'white', bg: 'blue' }, false);
+    expect(attr).toEqual({ color: 'white', bold: false, bgColor: 'blue' });
+  });
+
+  it('omits bgColor entirely when the glyph has no background', () => {
+    const attr = cellAttr({ char: '#', color: 'white' }, true);
+    expect(attr).toEqual({ color: 'white', bold: true });
+    expect('bgColor' in attr).toBe(false);
   });
 });

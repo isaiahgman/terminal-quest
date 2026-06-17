@@ -1,23 +1,13 @@
 import terminalKit from 'terminal-kit';
 import { type GameState, tileAt } from '../game/state.js';
 import { computeCamera } from '../game/world/camera.js';
-import { type Glyph, glyphForTile, PLAYER_GLYPH } from './sprites.js';
+import { cellAttr, glyphForTile, PLAYER_GLYPH } from './sprites.js';
 
 type Term = typeof terminalKit.terminal;
 
 /** DEC private mode 2026 — synchronized output, so a frame composites atomically. */
 const SYNC_ON = '\x1b[?2026h';
 const SYNC_OFF = '\x1b[?2026l';
-
-/** A terminal-kit cell attribute built from a glyph; bgColor is omitted when unset. */
-function cellAttr(
-  g: Glyph,
-  bold: boolean,
-): { color: string; bold: boolean; bgColor?: string } {
-  return g.bg === undefined
-    ? { color: g.color, bold }
-    : { color: g.color, bold, bgColor: g.bg };
-}
 
 /**
  * Read-only renderer: draws a GameState into one full-screen ScreenBuffer and
