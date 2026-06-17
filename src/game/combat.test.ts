@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { resolveAttack, regenStamina } from './combat.js';
-import type { Combatant, AttackSpec, Rng } from './combat.js';
+import type { Combatant, AttackSpec, RngFn } from './combat.js';
 
 /**
  * A deterministic, scriptable RNG: yields the queued values in order and
  * throws if drained — so a test fails loudly if combat consumes more rolls
  * than expected (e.g. rolling for out-of-radius targets).
  */
-function scriptedRng(values: number[]): Rng {
+function scriptedRng(values: number[]): RngFn {
   let i = 0;
   return () => {
     if (i >= values.length)
@@ -17,7 +17,7 @@ function scriptedRng(values: number[]): Rng {
 }
 
 /** RNG that fails on any call — proves a code path consumes no randomness. */
-const noRng: Rng = () => {
+const noRng: RngFn = () => {
   throw new Error('rng must not be called');
 };
 
@@ -206,6 +206,23 @@ describe('resolveAttack — damage math', () => {
     expect(result.outcomes[0]!.damage).toBe(1);
     expect(result.targets[0]!.hp).toBe(29);
   });
+
+  it('lets overkill drive hp negative rather than clamping it to 0', () => {
+    // 3 hp hit for 7 (base 5 + atk 2) ⇒ -4. hp is NOT clamped at 0: the sign of
+    // the result is the contract that *future* death detection will read — a
+    // dead combatant is hp <= 0, so the engine must preserve the negative
+    // remainder. Nothing consumes that boundary yet (enemy.ts only documents
+    // "reaches 0 → dead"); clamping here would pre-emptively erase the signal.
+    const target = makeTarget(0, 0, { hp: 3 });
+    const result = resolveAttack(
+      makeAttacker({ atk: 2 }),
+      [target],
+      SPEC,
+      scriptedRng([0.0]),
+    );
+    expect(result.outcomes[0]!.damage).toBe(7);
+    expect(result.targets[0]!.hp).toBe(-4);
+  });
 });
 
 describe('resolveAttack — stamina', () => {
@@ -312,7 +329,7 @@ describe('purity — inputs are never mutated', () => {
 });
 
 /** A seeded mulberry32 PRNG — fixed seed ⇒ a fixed roll stream, so this is deterministic. */
-function mulberry32(seed: number): Rng {
+function mulberry32(seed: number): RngFn {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) | 0;
