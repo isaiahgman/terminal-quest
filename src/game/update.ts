@@ -1,7 +1,7 @@
 import { type GameState, type LiveEnemy, isWalkable } from './state.js';
 import {
   type Combatant,
-  type Rng,
+  type RngFn,
   regenStamina,
   resolveAttack,
 } from './combat.js';
@@ -64,7 +64,7 @@ export function update(
   state: GameState,
   intents: readonly Intent[],
   dt: number,
-  rng: Rng,
+  rng: RngFn,
 ): GameState {
   // --- Intent selection: at most one move and one attack per tick. ---
   // Auto-repeat (holding a key) and the input buffer can queue several intents
