@@ -27,6 +27,19 @@ describe('tileset palette', () => {
     expect(glyphForTile('floor').char).not.toBe(glyphForTile('wall').char);
     expect(glyphForTile('floor').bg).not.toBe(glyphForTile('wall').bg);
   });
+
+  it('returns the same shared instance per tile across calls (no per-cell allocation)', () => {
+    for (const tile of ALL_TILES) {
+      expect(glyphForTile(tile)).toBe(glyphForTile(tile));
+    }
+  });
+
+  it('returns stable char/color values across calls', () => {
+    const first = glyphForTile('floor');
+    const second = glyphForTile('floor');
+    expect(second.char).toBe(first.char);
+    expect(second.color).toBe(first.color);
+  });
 });
 
 describe('player glyph', () => {
