@@ -138,8 +138,14 @@ describe('stepEnemy — charge within the proximity threshold', () => {
     // more ground. A flat per-tick lunge would tie them — the multiplier must
     // not. Several ticks so the brute's sub-tile budget gets a chance to spend.
     const player: Vec2 = { x: 0, y: 0 };
-    let runner = { e: createEnemy('runner', { x: CHARGE_RADIUS, y: 0 }), ai: createEnemyAi() }; // speed 8
-    let brute = { e: createEnemy('brute', { x: CHARGE_RADIUS, y: 0 }), ai: createEnemyAi() }; // speed 2
+    let runner = {
+      e: createEnemy('runner', { x: CHARGE_RADIUS, y: 0 }),
+      ai: createEnemyAi(),
+    }; // speed 8
+    let brute = {
+      e: createEnemy('brute', { x: CHARGE_RADIUS, y: 0 }),
+      ai: createEnemyAi(),
+    }; // speed 2
     for (let i = 0; i < 3; i++) {
       const r = stepEnemy(runner.e, runner.ai, player, open, TICK);
       runner = { e: r.enemy, ai: r.ai };
@@ -222,7 +228,10 @@ describe('stepEnemy — walls and walkability', () => {
     // the moment the wall opened. The clamp must hold it to one step.
     const player: Vec2 = { x: 5, y: 0 };
     const wallColumn = (x: number): boolean => x !== 1;
-    let pinned = { e: createEnemy('grunt', { x: 0, y: 0 }), ai: createEnemyAi() };
+    let pinned = {
+      e: createEnemy('grunt', { x: 0, y: 0 }),
+      ai: createEnemyAi(),
+    };
     for (let i = 0; i < 20; i++) {
       const r = stepEnemy(pinned.e, pinned.ai, player, wallColumn, TICK);
       pinned = { e: r.enemy, ai: r.ai };
