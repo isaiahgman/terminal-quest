@@ -71,6 +71,14 @@ export class Input {
       }
       const dir = KEY_TO_DIRECTION[name];
       if (dir !== undefined) {
+        // Re-seat the direction at the end of the Map so the most-recently
+        // pressed direction is always last in iteration order. `update()`
+        // applies only the *last* move intent per tick, so without the delete
+        // a re-press of an already-held direction keeps its old slot and a
+        // quick reversal (up → down → up) would stay stuck on the previous
+        // direction until it timed out. delete-then-set makes "last pressed
+        // wins" actually true.
+        this.held.delete(dir);
         this.held.set(dir, this.now());
       }
     });

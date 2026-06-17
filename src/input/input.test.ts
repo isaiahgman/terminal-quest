@@ -149,6 +149,32 @@ describe('Input', () => {
     ]);
   });
 
+  it('re-pressing an already-held direction re-seats it as last (last pressed wins)', () => {
+    const { input, press, advance } = makeInput();
+
+    // Reverse up → down → up, all inside one window. `update()` applies the
+    // LAST move intent, so the freshest press must land last in drain order.
+    // Before the delete-then-set fix, re-pressing UP kept its original slot and
+    // the player stayed stuck moving DOWN until DOWN expired.
+    press('UP');
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: -1 }]);
+
+    press('DOWN'); // newer than UP → DOWN is last
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([
+      { type: 'move', dx: 0, dy: -1 },
+      { type: 'move', dx: 0, dy: 1 },
+    ]);
+
+    press('UP'); // re-press: UP must jump back to last so update() applies it
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([
+      { type: 'move', dx: 0, dy: 1 },
+      { type: 'move', dx: 0, dy: -1 },
+    ]);
+  });
+
   it('buffers nothing for an unmapped key', () => {
     const { input, press } = makeInput();
 

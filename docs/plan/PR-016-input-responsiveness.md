@@ -26,5 +26,7 @@ Merged means: pressing and holding a direction starts moving on the next tick an
 - No `eslint-disable`/`any`/`@ts-ignore`. Inject the clock (don't call `performance.now()` straight in logic) so the behaviour is testable.
 
 ## Notes
-- Terminals have no key-up, so "release" is inferred by timeout — there's an unavoidable short **coast after release** (~one window). Document the chosen window; it's the cost of removing the stall. (If coast feels bad, the lever is window size, not architecture.)
+- Terminals have no key-up *in the legacy model*, so here "release" is inferred by timeout — there's an unavoidable short **coast after release** (~one window). Document the chosen window; it's the cost of removing the stall. (If coast feels bad, the lever is window size, not architecture.)
+- **This is the *fallback* tier.** During implementation we found modern terminals can report real key-release via the kitty keyboard protocol, which removes the coast entirely — see [`tdd.md` §12](../tdd.md). That's [PR-018](PR-018-kitty-keyboard-release.md) (the no-coast primary tier); this ticket is the graceful fallback for terminals without protocol support. Both feed the same `Intent` seam, so 018 plugs into the held-set this PR introduces without touching the loop or sim.
+- Held-set ordering: re-seat a re-pressed direction as the most recent (delete-then-set) so the freshest press wins when `update()` takes the last intent — otherwise a quick reversal sticks on the prior direction until it times out.
 - Pairs with [PR-017](PR-017-diagonal-movement.md) (diagonals): the held-direction state this introduces is exactly what diagonal-combining needs, so do 016 first.
