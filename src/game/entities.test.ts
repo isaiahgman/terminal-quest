@@ -276,7 +276,12 @@ describe('stepEnemy — determinism & purity', () => {
 describe('contactDamage — standing still gets you chipped down', () => {
   it('deals the enemy atk when adjacent to the player', () => {
     const enemy = createEnemy('grunt', { x: 1, y: 0 });
-    expect(contactDamage(enemy, { x: 0, y: 0 })).toBe(enemy.atk);
+    expect(contactDamage(enemy, { x: 0, y: 0 })).toBe(2);
+  });
+
+  it('deals the kind-specific atk for a runner at contact', () => {
+    const enemy = createEnemy('runner', { x: 1, y: 0 });
+    expect(contactDamage(enemy, { x: 0, y: 0 })).toBe(1);
   });
 
   it('deals atk diagonally adjacent too (8-neighbourhood)', () => {
@@ -286,7 +291,7 @@ describe('contactDamage — standing still gets you chipped down', () => {
 
   it('deals atk when occupying the player cell', () => {
     const enemy = createEnemy('brute', { x: 4, y: 4 });
-    expect(contactDamage(enemy, { x: 4, y: 4 })).toBe(enemy.atk);
+    expect(contactDamage(enemy, { x: 4, y: 4 })).toBe(5);
   });
 
   it('deals nothing when more than one tile away', () => {
