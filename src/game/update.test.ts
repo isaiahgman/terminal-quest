@@ -136,6 +136,37 @@ describe('update — movement', () => {
     expect(next.player.pos).toEqual({ x: 2, y: 1 });
   });
 
+  it('takes a diagonal step when its target tile is floor', () => {
+    // The plus fixture has wall corners, so prove the diagonal *succeeds* on an
+    // open 2x2 world: from (0,0) a {dx:1,dy:1} intent lands on the (1,1) floor.
+    const next = update(
+      makeState({
+        world: openWorld(2, 2),
+        player: createPlayer({ x: 0, y: 0 }),
+      }),
+      [{ type: 'move', dx: 1, dy: 1 }],
+      TICK,
+      noRng,
+    );
+    expect(next.player.pos).toEqual({ x: 1, y: 1 });
+  });
+
+  it('takes only the last of two perpendicular intents — no diagonal combine', () => {
+    // "right" then "up" from the center: the engine keeps the last move only, so
+    // the player ends at (1,0) (up). A combined step would aim at (2,0) — a wall
+    // — landing nowhere; (1,0) distinguishes last-wins from any combine.
+    const next = update(
+      makeState(),
+      [
+        { type: 'move', dx: 1, dy: 0 },
+        { type: 'move', dx: 0, dy: -1 },
+      ],
+      TICK,
+      noRng,
+    );
+    expect(next.player.pos).toEqual({ x: 1, y: 0 });
+  });
+
   it('increments the tick by exactly 1 regardless of intent count', () => {
     expect(update(makeState(), [], TICK, noRng).tick).toBe(1);
     expect(
