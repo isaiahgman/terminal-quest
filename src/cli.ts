@@ -88,6 +88,16 @@ function main(): void {
   term.hideCursor(true);
   term.grabInput(true);
 
+  // Install crash/signal handlers before any setup runs: a throw from world
+  // generation, spawn placement, or the renderer/input constructors below must
+  // still restore the terminal via shutdown(), never leave it raw/alt-screen.
+  process.on('SIGINT', () => shutdown(0));
+  process.on('SIGTERM', () => shutdown(0));
+  process.on('uncaughtException', (err: unknown) => {
+    console.error(err);
+    shutdown(1);
+  });
+
   // A fresh world each launch; saving/restoring a chosen seed is TQ-012. The
   // world is larger than the screen so the camera has to follow the player.
   const worldSeed = Math.floor(Math.random() * 0x100000000);
@@ -108,13 +118,6 @@ function main(): void {
   const simRng = new Rng(worldSeed ^ 0x9e3779b9);
   const renderer = new Renderer(term);
   const input = new Input(term);
-
-  process.on('SIGINT', () => shutdown(0));
-  process.on('SIGTERM', () => shutdown(0));
-  process.on('uncaughtException', (err: unknown) => {
-    console.error(err);
-    shutdown(1);
-  });
 
   runLoop(state, {
     drainIntents: () => input.drain(),
