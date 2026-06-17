@@ -175,6 +175,42 @@ describe('Input', () => {
     ]);
   });
 
+  it('maps the attack keys to one-shot attack intents', () => {
+    const cases: Array<[string, string]> = [
+      ['j', 'quick-jab'],
+      ['k', 'wide-cleave'],
+      ['l', 'whirling-maelstrom'],
+    ];
+
+    for (const [key, attackId] of cases) {
+      const { input, press } = makeInput();
+      press(key);
+      expect(input.drain()).toEqual([{ type: 'attack', attackId }]);
+    }
+  });
+
+  it('fires an attack exactly once — not re-emitted next tick like a held move', () => {
+    const { input, press, advance } = makeInput();
+
+    press('j');
+    expect(input.drain()).toEqual([{ type: 'attack', attackId: 'quick-jab' }]);
+    // No re-press: unlike a held direction, the attack does not repeat next tick.
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([]);
+  });
+
+  it('emits a held move and a queued attack together in one drain', () => {
+    const { input, press, advance } = makeInput();
+
+    press('RIGHT');
+    press('k');
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([
+      { type: 'move', dx: 1, dy: 0 },
+      { type: 'attack', attackId: 'wide-cleave' },
+    ]);
+  });
+
   it('buffers nothing for an unmapped key', () => {
     const { input, press } = makeInput();
 

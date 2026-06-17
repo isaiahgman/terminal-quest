@@ -1,10 +1,13 @@
 import { performance } from 'node:perf_hooks';
 import { type GameState } from './state.js';
-import { type Intent, SIM_DT, update } from './update.js';
+import { type Rng } from './combat.js';
+import { type Intent, SIM_DT, SIM_DT_SECONDS, update } from './update.js';
 
 export interface LoopHooks {
   /** Pull (and clear) the intents collected since the last tick. */
   drainIntents: () => readonly Intent[];
+  /** Injected seeded randomness for the sim (attack rolls); see `combat.ts`. */
+  rng: Rng;
   /** Draw the current state (read-only). */
   render: (state: GameState) => void;
   /** Return true to end the loop. */
@@ -38,7 +41,7 @@ export function runLoop(initial: GameState, hooks: LoopHooks): void {
 
     let advanced = false;
     while (acc >= SIM_DT) {
-      state = update(state, hooks.drainIntents());
+      state = update(state, hooks.drainIntents(), SIM_DT_SECONDS, hooks.rng);
       acc -= SIM_DT;
       advanced = true;
     }
