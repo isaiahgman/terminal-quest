@@ -12,7 +12,7 @@ Merged means: the player has 2–3 distinct named attacks bound to keys; using t
 - [ ] Each attack is bound to a key; pressing it triggers that attack via the engine
 - [ ] Spamming drains stamina; at empty, attacks are blocked until regen (forces repositioning)
 - [ ] Distinct, observable difference between low- and high-risk attacks in play
-- [ ] `pnpm typecheck` passes; engine tests still green
+- [ ] `npm run typecheck` passes; engine tests still green
 
 ## Plan
 1. Author the attack specs (final names TBD with Isaiah — placeholders fine).
