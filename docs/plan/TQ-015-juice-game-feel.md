@@ -1,5 +1,5 @@
-# PR-015 — Juice: hit flashes, damage numbers, screen shake
-Status: ready · Depends on: PR-008 · Scope: ~M · Touches: src/render/fx.ts, src/render/renderer.ts
+# TQ-015 — Juice: hit flashes, damage numbers, screen shake
+Status: ready · Depends on: TQ-008 · Scope: ~M · Touches: src/render/fx.ts, src/render/renderer.ts
 
 ## Context
 Game feel ([prd §9](../prd.md#9-game-feel--juice-when-we-get-there)). Isaiah flagged this as hard and renderer-dependent — deliberately **last**, once the loop is proven. Pure presentation; no rules change.

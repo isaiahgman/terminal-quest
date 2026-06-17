@@ -1,5 +1,5 @@
-# PR-009 — Leveling + power curve (pure)
-Status: ready · Depends on: PR-006 · Scope: ~M · Touches: src/game/progression.ts, src/game/progression.test.ts, src/game/update.ts
+# TQ-009 — Leveling + power curve (pure)
+Status: ready · Depends on: TQ-006 · Scope: ~M · Touches: src/game/progression.ts, src/game/progression.test.ts, src/game/update.ts
 
 ## Context
 **The dopamine engine** ([prd §2](../prd.md#2-the-feeling-were-chasing-the-real-spec)). This is where the "impossible → trivial" Solo-Leveling delta is manufactured. The most important *feel* PR.

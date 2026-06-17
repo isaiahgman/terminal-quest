@@ -1,5 +1,5 @@
-# PR-012 — Save / autosave
-Status: ready · Depends on: PR-004, PR-009 · Scope: ~M · Touches: src/save/save.ts, src/cli.ts, src/game/loop.ts
+# TQ-012 — Save / autosave
+Status: ready · Depends on: TQ-004, TQ-009 · Scope: ~M · Touches: src/save/save.ts, src/cli.ts, src/game/loop.ts
 
 ## Context
 Persistence ([prd §8](../prd.md#8-save), [tdd §9](../tdd.md#9-save)): drop the player back exactly where they were, and make progression *persistent* (roguelite).
@@ -11,7 +11,7 @@ Merged means: the game autosaves and, on relaunch, restores the player's locatio
 - [ ] `save.ts` serializes/deserializes the save fields to `~/.terminal-quest/save.json`
 - [ ] **Autosave** on interval + key events (boss kill, weapon equip)
 - [ ] On launch: existing save → resume exactly (same world from seed, same position/stats); no save → new game
-- [ ] World reconstructs deterministically from the saved seed (relies on PR-004 determinism)
+- [ ] World reconstructs deterministically from the saved seed (relies on TQ-004 determinism)
 - [ ] Corrupt/missing save handled gracefully (start fresh, no crash); `pnpm typecheck` passes
 
 ## Plan

@@ -1,5 +1,5 @@
-# PR-001 — Tile renderer (ScreenBuffer)
-Status: merged · Depends on: PR-000 · Scope: ~M · Touches: src/render/renderer.ts, src/render/sprites.ts, src/game/state.ts
+# TQ-001 — Tile renderer (ScreenBuffer)
+Status: merged · Depends on: TQ-000 · Scope: ~M · Touches: src/render/renderer.ts, src/render/sprites.ts, src/game/state.ts
 
 ## Context
 The drawing layer ([tdd §2,7](../tdd.md#2-architecture--three-isolated-layers)). Everything visible flows through here.

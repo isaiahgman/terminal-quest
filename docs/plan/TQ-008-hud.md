@@ -1,5 +1,5 @@
-# PR-008 — HUD: health / stamina / level
-Status: ready · Depends on: PR-007 · Scope: ~S · Touches: src/render/hud.ts, src/render/renderer.ts
+# TQ-008 — HUD: health / stamina / level
+Status: ready · Depends on: TQ-007 · Scope: ~S · Touches: src/render/hud.ts, src/render/renderer.ts
 
 ## Context
 The player can't manage stamina/health they can't see ([prd F1/F3](../prd.md#10-features)). Makes the combat loop legible.
@@ -21,4 +21,4 @@ Merged means: a live HUD shows health, stamina, level/XP, and boss-progress, upd
 - Read-only rendering. Reserve HUD rows so it never overlaps the play area.
 
 ## Notes
-- `bosses defeated / 10` can read 0/10 until PR-011 lands — wire the field now.
+- `bosses defeated / 10` can read 0/10 until TQ-011 lands — wire the field now.

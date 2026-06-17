@@ -6,13 +6,13 @@ Synthesis of 8 parallel research streams (rendering, rot.js/algorithms, architec
 
 ## TL;DR — what this research changes about our plan
 
-1. **Biggest design risk found:** our *manual, stamina-gated* attack diverges from the genre, where auto-attack exists **specifically to prevent button-mash fatigue**. Fix: low stamina pool, **auto-target within the radius**, share stamina between attacking and dodging, reward *timing/positioning* over mashing. (Updates PRD §6, PR-006/007.)
-2. **Terminals have NO key-release events.** Real-time "hold to move" is impossible — design input as repeat-on-press with a decay timer or explicit stop. (Updates PR-003.)
-3. **Rendering recipe is settled:** one full-screen terminal-kit `ScreenBuffer`, `noFill`, **one `draw({delta:true})` per frame wrapped in DEC-2026 synchronized output**, render only the camera viewport, render only on change. (Updates PR-001/TDD §1.)
-4. **Game loop:** accumulator loop with a **max-frame clamp** (anti "spiral of death"); pass a **constant `SIM_DT`** into `update`, never wall-clock. Skip interpolation (discrete grid). (Updates PR-002/TDD §3.)
-5. **RNG:** one seeded generator is the single source of truth; **never `Math.random()`** in the sim. Save the **RNG state + seed**, not the tiles. (Updates PR-004/012, TDD §8/9.)
-6. **The "impossible → trivial" delta requires FIXED difficulty zones, not rubber-banding** — if the wall scales with you it's never trivial. Concrete curve: `XP = 50·L^1.8`, additive HP/stamina + geometric ×1.06 damage, stacked with multiplicative weapon/perk milestones → a maxed build is **20–50× a fresh one**. (Updates PR-009/011, TDD §8.)
-7. **Don't use `ROT.Display`** — use rot.js for algorithms only (`Map.Cellular` + `connect()`, `RNG`, `Path.Dijkstra` as a shared flow-field, `FOV`), render with terminal-kit. (Updates TDD §1/§7, PR-004/005.)
+1. **Biggest design risk found:** our *manual, stamina-gated* attack diverges from the genre, where auto-attack exists **specifically to prevent button-mash fatigue**. Fix: low stamina pool, **auto-target within the radius**, share stamina between attacking and dodging, reward *timing/positioning* over mashing. (Updates PRD §6, TQ-006/007.)
+2. **Terminals have NO key-release events.** Real-time "hold to move" is impossible — design input as repeat-on-press with a decay timer or explicit stop. (Updates TQ-003.)
+3. **Rendering recipe is settled:** one full-screen terminal-kit `ScreenBuffer`, `noFill`, **one `draw({delta:true})` per frame wrapped in DEC-2026 synchronized output**, render only the camera viewport, render only on change. (Updates TQ-001/TDD §1.)
+4. **Game loop:** accumulator loop with a **max-frame clamp** (anti "spiral of death"); pass a **constant `SIM_DT`** into `update`, never wall-clock. Skip interpolation (discrete grid). (Updates TQ-002/TDD §3.)
+5. **RNG:** one seeded generator is the single source of truth; **never `Math.random()`** in the sim. Save the **RNG state + seed**, not the tiles. (Updates TQ-004/012, TDD §8/9.)
+6. **The "impossible → trivial" delta requires FIXED difficulty zones, not rubber-banding** — if the wall scales with you it's never trivial. Concrete curve: `XP = 50·L^1.8`, additive HP/stamina + geometric ×1.06 damage, stacked with multiplicative weapon/perk milestones → a maxed build is **20–50× a fresh one**. (Updates TQ-009/011, TDD §8.)
+7. **Don't use `ROT.Display`** — use rot.js for algorithms only (`Map.Cellular` + `connect()`, `RNG`, `Path.Dijkstra` as a shared flow-field, `FOV`), render with terminal-kit. (Updates TDD §1/§7, TQ-004/005.)
 8. **Study three repos before coding:** `term-survivors` (terminal VS-clone), `typescript-action-roguelike`/COPONGO (sim⟂render architecture), and the Klepinger rot.js+TS tutorial.
 
 ---
@@ -108,14 +108,14 @@ Sources: [Art of Screenshake](https://www.youtube.com/watch?v=AJdEqssNZ-U) · [J
 |---|---|
 | `prd.md` §6 | Reframe combat: low-stamina + auto-target + shared offense/defense pool; reward timing/positioning not mashing |
 | `tdd.md` §1,3,7,8,9 | terminal-kit delta + DEC-2026; accumulator loop + constant SIM_DT; rot.js algorithms only (no Display); single seeded RNG; save seed+RNG-state via env-paths + atomic write |
-| PR-002 | Accumulator loop w/ max-frame clamp; render-on-change |
-| PR-003 | **No key-release** input model (repeat-on-press + decay / stop key); square-grid aspect |
-| PR-004 | `Map.Cellular` + `connect()`; hash string seed→int; determinism rules |
-| PR-005 | Dijkstra flow-field per tick (not per-enemy A*); spawn off-camera + telegraph |
-| PR-006/007 | Stamina model fix; auto-target in radius; overspend + recovery beat; attack windup |
-| PR-009/011 | `XP=50·L^1.8`; additive base + ×1.06 dmg + multiplicative milestones; **fixed zones, no rubber-band**; boss gating by effective power; TTK targets |
-| PR-010 | Weapon **identity** + upgrade-as-commitment; no strictly-dominated drops |
-| PR-012 | Save seed + RNG state (not tiles); atomic temp→rename; env-paths; throttled async |
-| PR-013 | Meta = options not numbers; rising costs; every death pays out |
-| PR-015 | Event-buffer effects w/ frame-ttl; hit-stop + flash + numbers + ±1 shake; toggles |
+| TQ-002 | Accumulator loop w/ max-frame clamp; render-on-change |
+| TQ-003 | **No key-release** input model (repeat-on-press + decay / stop key); square-grid aspect |
+| TQ-004 | `Map.Cellular` + `connect()`; hash string seed→int; determinism rules |
+| TQ-005 | Dijkstra flow-field per tick (not per-enemy A*); spawn off-camera + telegraph |
+| TQ-006/007 | Stamina model fix; auto-target in radius; overspend + recovery beat; attack windup |
+| TQ-009/011 | `XP=50·L^1.8`; additive base + ×1.06 dmg + multiplicative milestones; **fixed zones, no rubber-band**; boss gating by effective power; TTK targets |
+| TQ-010 | Weapon **identity** + upgrade-as-commitment; no strictly-dominated drops |
+| TQ-012 | Save seed + RNG state (not tiles); atomic temp→rename; env-paths; throttled async |
+| TQ-013 | Meta = options not numbers; rising costs; every death pays out |
+| TQ-015 | Event-buffer effects w/ frame-ttl; hit-stop + flash + numbers + ±1 shake; toggles |
 | New: PR-0xx | Consider a **headless sim/replay mode** (à la term-survivors) for automated balance tuning |

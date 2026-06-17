@@ -19,7 +19,7 @@ const term = terminalKit.terminal;
  * the choice reproduces alongside the map — but only at a fixed world size: the
  * walkable-tile list comes from a map sized to the terminal, so the same seed in
  * a differently-sized terminal yields a different map and a different spawn.
- * PR-012 resume must therefore persist the world width/height alongside the
+ * TQ-012 resume must therefore persist the world width/height alongside the
  * seed, not the seed alone.
  * `generateWorld` guarantees at least one floor tile, so the list is non-empty.
  */
@@ -54,7 +54,7 @@ function main(): void {
   term.hideCursor(true);
   term.grabInput(true);
 
-  // A fresh world each launch; saving/restoring a chosen seed is PR-012. The
+  // A fresh world each launch; saving/restoring a chosen seed is TQ-012. The
   // world is larger than the screen so the camera has to follow the player.
   const worldSeed = Math.floor(Math.random() * 0x100000000);
   const world = generateWorld(term.width * 2, term.height * 2, worldSeed);

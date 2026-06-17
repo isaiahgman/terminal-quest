@@ -1,7 +1,7 @@
 /**
  * Core game state. This is the single source of truth the simulation advances
  * and the renderer reads. Keep it plain data (serializable) — no methods, no
- * class instances — so save/load is trivial later (PR-012).
+ * class instances — so save/load is trivial later (TQ-012).
  */
 
 export interface Vec2 {
@@ -26,7 +26,7 @@ export interface Player {
 export interface GameState {
   world: World;
   player: Player;
-  /** Monotonic simulation tick counter (set by the loop in PR-002). */
+  /** Monotonic simulation tick counter (set by the loop in TQ-002). */
   tick: number;
 }
 
