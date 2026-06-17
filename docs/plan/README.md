@@ -41,11 +41,12 @@ Strategy: **prove the core dopamine loop before adding content.** Phases 1–2 d
 | [015](TQ-015-juice-game-feel.md) | Juice: hit flashes, damage numbers, screen shake | 008 |
 
 ## Beta feedback — input feel (2026-06-15)
-Surfaced by play-testing the merged movement build. Both fix the input layer (`src/input/input.ts`); do them in order — 017 builds on 016's held-direction state.
+Surfaced by play-testing the merged movement build. All three touch the input layer (`src/input/input.ts`); 017 and 018 both build on 016's held-direction state (independently of each other). 018 was discovered *during* 016 — see [`tdd.md` §12](../tdd.md).
 | TQ | Title | Depends on |
 |----|-------|-----------|
-| [016](TQ-016-input-responsiveness.md) | Responsive held-direction movement (kill the OS key-repeat stall) | 003 |
+| [016](TQ-016-input-responsiveness.md) | Responsive held-direction movement (kill the OS key-repeat stall) — timeout fallback tier | 003 |
 | [017](TQ-017-diagonal-movement.md) | Diagonal (8-direction) movement | 016 |
+| [018](TQ-018-kitty-keyboard-release.md) | Real key-release via the kitty keyboard protocol (no-coast primary tier) | 016 |
 
 ## Dependency graph (spine)
 ```
