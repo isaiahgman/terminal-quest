@@ -1,5 +1,5 @@
 # PR-004 — Procedural world gen + collision
-Status: in progress (sliced — see Slicing) · Depends on: PR-003 · Scope: ~M · Touches: src/game/world/generate.ts, src/game/rng.ts, src/game/update.ts
+Status: in progress (sliced — see Slicing) · Depends on: PR-003 · Scope: ~M · Touches: src/game/world/generate.ts, src/game/rng.ts, src/game/update.ts, src/cli.ts
 
 ## Context
 The open-feeling world ([prd §7](../prd.md#7-world--progression), [tdd §7](../tdd.md#7-world-gen--camera)) via rot.js. Accepted that hand-authoring a big world is the bottleneck → procedural.
@@ -14,9 +14,9 @@ Merged means: a large seeded walkable world generates with obstacles, the player
 - [x] `npm typecheck`/`check` passes
 
 **PR-004b — RNG wrapper + collision wiring (follow-up):**
-- [ ] `rng.ts` exposes a seeded RNG wrapping rot.js (localizes the global-RNG side effect — see Constraints) — *being built on the `pr-rng-seeded` branch*
-- [ ] `generate.ts` called with **large** dimensions (≥ several screens) from the integration layer
-- [ ] Player spawns on a walkable tile; **collision** prevents walking through walls (via `isWalkable` in `update()`)
+- [x] `rng.ts` exposes a seeded RNG wrapping rot.js (localizes the global-RNG side effect — see Constraints) — landed; `cli.ts` is its first consumer (deterministic spawn pick)
+- [x] `generate.ts` called with **large** dimensions (≥ several screens) from the integration layer — `cli.ts` generates a `term.width*2 × term.height*2` world
+- [x] Player spawns on a walkable tile; **collision** prevents walking through walls (via `isWalkable` in `update()`)
 
 ## Plan
 1. Seed the RNG; generate with a rot.js map generator (cellular for caverns, or open field + scattered obstacles).
@@ -32,4 +32,4 @@ Merged means: a large seeded walkable world generates with obstacles, the player
 ## Slicing
 PR-004 split into atomic PRs (mirrors PR-006 → PR-007):
 - **PR-004a** = the pure `generateWorld` (this PR) — render/input-agnostic, no shared files touched.
-- **PR-004b** = `rng.ts` seeded wrapper (`pr-rng-seeded` branch) + spawn + collision wiring into `update.ts`.
+- **PR-004b** = `rng.ts` seeded wrapper + spawn + collision wiring. Collision is `isWalkable` in `update.ts` (already present); the integration (large-world gen + seeded spawn pick) lands in `cli.ts`.
