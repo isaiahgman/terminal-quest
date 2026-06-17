@@ -1,5 +1,5 @@
-# PR-013 — Growing home base (persistent meta)
-Status: ready · Depends on: PR-012 · Scope: ~M · Touches: src/game/base.ts, src/game/state.ts, src/render/renderer.ts, src/save/save.ts
+# TQ-013 — Growing home base (persistent meta)
+Status: ready · Depends on: TQ-012 · Scope: ~M · Touches: src/game/base.ts, src/game/state.ts, src/render/renderer.ts, src/save/save.ts
 
 ## Context
 The meta-progression anchor ([prd §7](../prd.md#7-world--progression)): a home that **grows** as you progress and persists across runs/sessions.
@@ -17,7 +17,7 @@ Merged means: there's a base location the player returns to; it visibly grows wi
 ## Plan
 1. `base.ts`: base state + growth rules tied to progress.
 2. Place the base; render its current tier; apply any buff to the player.
-3. Include base in the save (PR-012).
+3. Include base in the save (TQ-012).
 
 ## Constraints
 - Keep growth rules data-driven and tied to existing progress signals — don't invent a second economy unless needed.

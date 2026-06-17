@@ -1,5 +1,5 @@
-# PR-007 — Named attack types (risk/reward) wired to input
-Status: ready · Depends on: PR-006 · Scope: ~S · Touches: src/data/attacks.ts, src/input/input.ts, src/game/update.ts
+# TQ-007 — Named attack types (risk/reward) wired to input
+Status: ready · Depends on: TQ-006 · Scope: ~S · Touches: src/data/attacks.ts, src/input/input.ts, src/game/update.ts
 
 ## Context
 Turns the engine into *play* ([prd §6](../prd.md#6-combat--the-signature-system)): 1–3 creatively-named attacks on a risk/reward axis, mash-but-stamina-limited.
@@ -17,10 +17,10 @@ Merged means: the player has 2–3 distinct named attacks bound to keys; using t
 ## Plan
 1. Author the attack specs (final names TBD with Isaiah — placeholders fine).
 2. Map keys → attack intents in `input.ts`; `update()` calls `resolveAttack`.
-3. Surface a brief "too tired" cue when blocked (full HUD is PR-008).
+3. Surface a brief "too tired" cue when blocked (full HUD is TQ-008).
 
 ## Constraints
-- No new combat math here — reuse PR-006's engine. Data + wiring only.
+- No new combat math here — reuse TQ-006's engine. Data + wiring only.
 
 ## Notes
 - Names are a creative hook; leave a TODO to finalize them. A high-risk attack with a vulnerable wind-up is a great stretch.

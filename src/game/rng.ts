@@ -14,7 +14,7 @@ import { RNG } from 'rot-js';
  * instances never share global state, then re-seeded. This is the INJECTED RNG
  * for sim logic (combat/progression). Note it does NOT seed rot.js's *global*
  * `ROT.RNG` singleton, which rot.js map generators (e.g. `ROT.Map.Cellular`) read
- * directly — so world gen (PR-004) must seed that global from the same world seed
+ * directly — so world gen (TQ-004) must seed that global from the same world seed
  * separately to make "same seed → same world" hold.
  */
 export class Rng {

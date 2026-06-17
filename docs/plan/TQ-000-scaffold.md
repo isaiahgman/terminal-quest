@@ -1,4 +1,4 @@
-# PR-000 — Project scaffold
+# TQ-000 — Project scaffold
 Status: merged · Depends on: none · Scope: ~S · Touches: package.json, tsconfig.json, src/cli.ts
 
 ## Context

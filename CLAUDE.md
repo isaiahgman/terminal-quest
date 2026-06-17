@@ -5,7 +5,7 @@ A real-time terminal action-roguelike with Solo-Leveling power progression (Vamp
 ## Read these first
 - `docs/prd.md` — what & why; **§2 is the real spec** (the "impossible → trivial" power delta we're chasing)
 - `docs/tdd.md` — stack + the pure-sim ⟂ render ⟂ input architecture
-- `docs/plan/README.md` — phased roadmap + atomic per-PR artifacts (build in dependency order)
+- `docs/plan/README.md` — phased roadmap + atomic `TQ-NNN` artifacts (build in dependency order)
 
 ## Stack
 TypeScript (strict) · **terminal-kit** (ScreenBuffer rendering + input) · **rot.js** (procedural gen, seeded RNG, FOV, pathfinding) · vitest · ESLint + Prettier · **npm** · Node ≥ 18.
@@ -26,12 +26,12 @@ Three isolated layers:
 2. **Render** (`src/render/`) — reads state, draws to ScreenBuffer. **Read-only**, never mutates state.
 3. **Input** (`src/input/`) — keypress → intents.
 
-Keep combat/progression math in pure, tested modules (`combat.ts`, `progression.ts`). Never let game math leak into render/input. This is what keeps it testable and lets us add juice (PR-015) safely.
+Keep combat/progression math in pure, tested modules (`combat.ts`, `progression.ts`). Never let game math leak into render/input. This is what keeps it testable and lets us add juice (TQ-015) safely.
 
 ## Execution workflow (how a ticket gets built)
-**Never push to `main`.** All work goes through branches + PRs. To pick up a ticket (e.g. PR-005):
-1. **Branch + worktree** — `git worktree add ../terminal-quest-pr-005 -b pr-005-<slug>` and work there (isolated from main).
-2. **Pick the planning artifact** — `docs/plan/PR-005-*.md`.
+**Never push to `main`.** All work goes through branches + PRs. To pick up a ticket (e.g. TQ-005):
+1. **Branch + worktree** — `git worktree add ../terminal-quest-tq-005 -b tq-005-<slug>` and work there (isolated from main).
+2. **Pick the planning artifact** — `docs/plan/TQ-005-*.md`.
 3. **Breakdown / context-collection stage** — before coding: read the artifact + its `Depends on` PRs + the PRD/TDD sections it links + the existing code it touches. Restate the goal, list files to change, confirm the Acceptance boxes are objectively checkable, surface unknowns.
 4. **Implement** to the acceptance criteria; run `npm run check` (typecheck + lint + test) — must be green.
 5. **Commit** on the branch (co-author trailer) and push the **branch** (never `main`).
@@ -45,10 +45,12 @@ Keep combat/progression math in pure, tested modules (`combat.ts`, `progression.
    ```
 7. Update the artifact's `Status` (`ready → in progress → merged`).
 
-> Skills (global): **`/status`** = where we are + the next ticket (dependency-aware, read-only). **`/pick-up PR-NNN`** = the alignment phase — reads PRD+TDD+artifact, makes a plan, talks it through; stops there (no code). Implementation (steps 1, 3–7 above) is a separate step after the plan is agreed.
+> Skills (global): **`/status`** = where we are + the next ticket (dependency-aware, read-only). **`/pick-up TQ-NNN`** = the alignment phase — reads PRD+TDD+artifact, makes a plan, talks it through; stops there (no code). Implementation (steps 1, 3–7 above) is a separate step after the plan is agreed.
 
 ## Source of truth
-**The repo is canonical** — `docs/plan/PR-NNN` artifacts + `docs/prd.md` + `docs/tdd.md`. GitHub Issues are **thin pointers** that map 1:1 to artifact filenames (title + link, never a copy). Never duplicate artifact content into an issue — there must be exactly one place content can change.
+**The repo is canonical** — `docs/plan/TQ-NNN` artifacts + `docs/prd.md` + `docs/tdd.md`. GitHub Issues are **thin pointers** that map 1:1 to artifact filenames (title + link, never a copy). Never duplicate artifact content into an issue — there must be exactly one place content can change.
+
+> **Namespaces:** `TQ-NNN` = a plan artifact (canonical, in `docs/plan/`). `#N` = a GitHub pull request. One `TQ-NNN` normally ships as several `#N` PRs — they are **not** the same number (`TQ-004` ≠ `#4`). Say `TQ-NNN` for plan work, `#N` for PRs.
 
 ## Standards & PR discipline
 - **Strictest ESLint + Prettier — no exceptions.** Never disable/loosen a rule; no `eslint-disable` / `@ts-ignore` / `any` / `_`-prefix tricks; no speculative unused code (add a param/field only when something uses it). Fix the code, not the config. `npm run check` must be green before every PR.
@@ -67,6 +69,6 @@ The **pure logic modules** in `src/game/` (e.g. `rng.ts`, `world/generate.ts`, `
 - Save the **world seed**, not the tile array (world is deterministic from seed).
 
 ## Current status
-**Merged:** PR-000 scaffold · PR-001 tile renderer + state + camera · PR-002/003 game loop + movement + following camera · linter (ESLint/Prettier + `npm run check`).
-**In flight (parallel pure-module PRs):** seeded RNG, procedural world generator (PR-004 core), enemy model (PR-005 core), combat math (PR-006 core).
-**Next:** integration PRs (sequential) — wire world-gen + enemies + combat into the loop/renderer so they become visible and playable.
+**Merged:** TQ-000 scaffold · TQ-001 tile renderer + state + camera · TQ-002/003 game loop + movement + following camera · seeded RNG · TQ-004 procedural world *generator* (#12/#13) · TQ-005 enemy AI module (#29) · TQ-006 combat engine (#10) · CI pipeline · linter + overnight test-coverage/fix batch.
+**Open PRs:** `#25` wire world-gen + spawn into cli (TQ-004b) · `#32` responsive held-direction movement (TQ-016).
+**Next:** after the open PRs land — TQ-007 attack types, TQ-008 HUD, TQ-009 leveling — the MVP cut line.

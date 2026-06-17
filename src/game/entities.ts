@@ -203,7 +203,7 @@ export function stepEnemy(
  * occupies the player's cell or any of the 8 neighbours (Chebyshev distance
  * ≤ 1), otherwise 0. This is the "standing still gets you swarmed and chipped
  * down" pressure (prd §5); per the artifact, a flat per-tick contact hit is
- * sufficient here — stamina-gated, probabilistic combat lands in PR-006/007.
+ * sufficient here — stamina-gated, probabilistic combat lands in TQ-006/007.
  */
 export function contactDamage(enemy: Enemy, playerPos: Vec2): number {
   return chebyshev(enemy.pos, playerPos) <= 1 ? enemy.atk : 0;
