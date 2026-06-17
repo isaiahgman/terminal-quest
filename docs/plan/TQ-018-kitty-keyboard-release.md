@@ -1,5 +1,5 @@
 # TQ-018 — Real key-release via the kitty keyboard protocol (progressive enhancement)
-Status: ready · Depends on: TQ-016 · Scope: ~M · Touches: src/input/input.ts (+ src/input/input.test.ts), src/cli.ts (enable/restore the mode on the real terminal)
+Status: in progress · Depends on: TQ-016 · Scope: ~M · Touches: src/input/keyDecoder.ts + src/input/input.ts + src/input/terminalKeyboard.ts (+ tests), src/cli.ts, scripts/capture-keys.mjs
 
 ## Context
 [TQ-016](TQ-016-input-responsiveness.md) made held-direction movement responsive, but it rests on a workaround: because we assumed terminals emit key-DOWN only (no key-up), it *infers* release with a timeout (`HELD_WINDOW_MS`). That inference has an unavoidable cost — a bounded **coast after release** — and is only a best-effort guess.
@@ -12,13 +12,13 @@ This ticket adds **Tier 1**: use real key-release where the terminal supports it
 Merged means: on a terminal that supports the kitty keyboard protocol, holding a direction moves with **zero coast** — movement stops on the tick after the physical release — while terminals without support keep TQ-016's timeout behaviour unchanged. The simulation still receives only `Intent`s and stays pure.
 
 ## Acceptance
-- [ ] On startup, the input layer **probes** for protocol support (`CSI ? u`) with a bounded wait, and records support as a boolean. No hang when there's no response (legacy terminal) — it falls back.
-- [ ] When supported, release reporting is enabled (`CSI = 2 u`, "report event types") and the **held-set is driven by real press/release events**, not the timeout; a key-up removes its direction on the next tick (no coast).
-- [ ] When **not** supported, behaviour is byte-for-byte TQ-016 (timeout model) — verified by the existing TQ-016 tests still passing unchanged.
-- [ ] The enhanced mode is **restored on exit** (and on crash/SIGINT) so the user's terminal is never left in the protocol mode — ties into the existing "always restore the terminal" exit handling in `cli.ts`.
-- [ ] A genuine OS auto-repeat event (event type 2) does **not** double-count as a new press in a way that breaks movement; repeats are treated as "still held."
-- [ ] Tier selection is unit-tested with an injected/faked event source: a release event clears the direction (Tier 1); with the timeout source the TQ-016 cases still hold (Tier 2).
-- [ ] `npm run check` green (typecheck + strict lint + tests). No rule disables.
+- [x] On startup, the input layer **probes** for protocol support (`CSI ? u` + a `CSI c` DA sentinel) with a bounded wait, and records support as a boolean. No hang when there's no response (legacy terminal) — it falls back. *(implemented in `terminalKeyboard.ts`; live behaviour needs verification in a real terminal — see Notes)*
+- [x] When supported, release reporting is enabled (`CSI > 10 u` — event types **+ all keys as escape codes**, required so WASD also gets release events) and the **held-set is driven by real press/release events**, not the timeout; a key-up removes its direction on the next tick (no coast). *(unit-tested in `input.test.ts` release tier)*
+- [x] When **not** supported, the **timeout model is unchanged** — same held-direction behaviour, verified by the timeout-tier tests still passing. *(Now fed by the decoder's legacy parsing rather than terminal-kit, since the input layer owns stdin; behaviour is equivalent, not the same code path.)*
+- [x] The enhanced mode is **restored on exit** (and on crash/SIGINT/uncaught) so the user's terminal is never left in the protocol mode — `keyboard.restore()` runs first in `shutdown()`, covering every exit path.
+- [x] A genuine OS auto-repeat event (event type 2) does **not** double-count as a new press in a way that breaks movement; repeats refresh the hold like a press. *(decoder maps event-type 2 → `repeat`; `input.test.ts` covers it.)*
+- [x] Tier selection is unit-tested with an injected event source: a release event clears the direction (Tier 1); with no releases the timeout cases still hold (Tier 2). Decoder grammar is unit-tested against the documented byte sequences.
+- [x] `npm run check` green (typecheck + strict lint + tests). No rule disables. Build green.
 
 ## Plan
 1. Add an input-source abstraction so `Input` consumes a normalised stream of `{ dir, kind: 'press' | 'repeat' | 'release' }` events; the held-set logic keys off that.
@@ -35,5 +35,6 @@ Merged means: on a terminal that supports the kitty keyboard protocol, holding a
 
 ## Notes
 - This composes with [TQ-017](TQ-017-diagonal-movement.md): diagonals just read which directions are live in the held-set, so Tier 1 makes them exact (no timeout smearing) but 017 doesn't depend on 018 — either order works.
-- Open question for the breakdown stage: confirm whether `terminal-kit`'s key handler can be left attached for non-`CSI u` input while we intercept the `CSI u` sequences, or whether we need to take over raw-mode key parsing for the whole input stream. Spike this first — it sizes the ticket.
-- If raw `CSI u` parsing turns out large, it can split further (probe+restore in one PR, the held-set wiring in another). Keep PRs tiny per project convention.
+- **Spike resolved:** terminal-kit's key handler **cannot** coexist with the protocol — its parser emits `'unknown'` and aborts the chunk on `CSI u` sequences (Terminal.js `onStdin`). So the input layer **owns stdin**: `keyDecoder.ts` parses both the protocol form and the legacy form (plain bytes + letter arrows + raw Ctrl-C), and terminal-kit is used only for rendering. One path covers supported and unsupported terminals.
+- **Needs live verification (couldn't be done in the dev sandbox — no interactive TTY):** the probe handshake and the on-exit restore are implemented but only exercised by unit tests at the logic level, not against a real terminal. Verify in a real terminal that (a) movement feels crisp with no coast, (b) Ctrl-C/`q` still quit, and (c) the terminal is clean after exit (no stuck raw mode / protocol).
+- **One terminal-specific constant:** WASD uses ASCII codepoints (certain). The **arrow** functional codepoints (`ARROW_CODEPOINT_TO_NAME`, currently 57297–57300) and the letter-arrow form are both decoded, but if arrows misbehave on a given terminal, run `node scripts/capture-keys.mjs` to see the real bytes and adjust that one map. This is the only expected tweak.
