@@ -1,16 +1,37 @@
 import terminalKit from 'terminal-kit';
 import {
-  isWalkable,
   type GameState,
   type Vec2,
   type World,
+  isWalkable,
 } from './game/state.js';
-import { sampleWorld } from './game/world/sampleMap.js';
+import { generateWorld } from './game/world/generate.js';
+import { Rng } from './game/rng.js';
 import { runLoop } from './game/loop.js';
 import { Input } from './input/input.js';
 import { Renderer } from './render/renderer.js';
 
 const term = terminalKit.terminal;
+
+/**
+ * Pick a walkable spawn tile deterministically. Draws from the injected
+ * {@link Rng} (seeded off the world seed) rather than the global rot.js RNG, so
+ * the choice reproduces alongside the map — but only at a fixed world size: the
+ * walkable-tile list comes from a map sized to the terminal, so the same seed in
+ * a differently-sized terminal yields a different map and a different spawn.
+ * PR-012 resume must therefore persist the world width/height alongside the
+ * seed, not the seed alone.
+ * `generateWorld` guarantees at least one floor tile, so the list is non-empty.
+ */
+function pickSpawn(world: World, rng: Rng): Vec2 {
+  const walkable: Vec2[] = [];
+  for (let y = 0; y < world.height; y++) {
+    for (let x = 0; x < world.width; x++) {
+      if (isWalkable(world, x, y)) walkable.push({ x, y });
+    }
+  }
+  return rng.pick(walkable);
+}
 
 /**
  * Restore the terminal to a clean state. Must run on EVERY exit path
@@ -28,41 +49,21 @@ function shutdown(code = 0): void {
   process.exit(code);
 }
 
-/**
- * Pick a guaranteed-walkable spawn. The world center is the intended spawn,
- * but procedural generation can put a wall there, so we spiral outward and
- * return the first walkable tile — never trusting the center coincidentally.
- */
-function findSpawn(world: World): Vec2 {
-  const cx = Math.floor(world.width / 2);
-  const cy = Math.floor(world.height / 2);
-  const maxRadius = Math.max(world.width, world.height);
-  for (let radius = 0; radius <= maxRadius; radius++) {
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        // Only the ring at exactly `radius` is new this iteration.
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
-        const x = cx + dx;
-        const y = cy + dy;
-        if (isWalkable(world, x, y)) return { x, y };
-      }
-    }
-  }
-  throw new Error('world has no walkable tile to spawn the player on');
-}
-
 function main(): void {
   term.fullscreen(true);
   term.hideCursor(true);
   term.grabInput(true);
 
-  // World is larger than the screen so the camera has to follow the player.
-  const world = sampleWorld(term.width * 2, term.height * 2);
+  // A fresh world each launch; saving/restoring a chosen seed is PR-012. The
+  // world is larger than the screen so the camera has to follow the player.
+  const worldSeed = Math.floor(Math.random() * 0x100000000);
+  const world = generateWorld(term.width * 2, term.height * 2, worldSeed);
+
+  // Spawn on open ground, picked deterministically from the same seed.
+  const spawn = pickSpawn(world, new Rng(worldSeed));
   const state: GameState = {
     world,
-    player: {
-      pos: findSpawn(world),
-    },
+    player: { pos: spawn },
     tick: 0,
   };
 
