@@ -13,7 +13,7 @@ import { generateWorld } from './game/world/generate.js';
 import { Rng } from './game/rng.js';
 import { runLoop } from './game/loop.js';
 import { Input } from './input/input.js';
-import { Renderer } from './render/renderer.js';
+import { Renderer, SYNC_OFF } from './render/renderer.js';
 
 const term = terminalKit.terminal;
 
@@ -76,6 +76,10 @@ let shuttingDown = false;
 function shutdown(code = 0): void {
   if (shuttingDown) return;
   shuttingDown = true;
+  // Leave synchronized-output mode (the renderer toggles DEC 2026 per frame); a
+  // crash mid-frame would otherwise freeze the display. Guard the write so an
+  // already-closed stdout (EPIPE) can't throw on the way out.
+  if (process.stdout.writable) process.stdout.write(SYNC_OFF);
   term.hideCursor(false);
   term.grabInput(false);
   term.fullscreen(false);
@@ -114,6 +118,12 @@ function main(): void {
   process.on('uncaughtException', (err: unknown) => {
     console.error(err);
     shutdown(1);
+  });
+  // A piped consumer (e.g. `tq | head`) closing stdout makes the next write
+  // raise EPIPE; without a listener Node throws and leaves the terminal dirty.
+  // Treat the departed reader as a clean exit, any other stream error as a fault.
+  process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+    shutdown(err.code === 'EPIPE' ? 0 : 1);
   });
 
   runLoop(state, {
