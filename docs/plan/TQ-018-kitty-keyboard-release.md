@@ -1,5 +1,5 @@
 # TQ-018 — Real key-release via the kitty keyboard protocol (progressive enhancement)
-Status: in progress · Depends on: TQ-016 · Scope: ~M · Touches: src/input/keyDecoder.ts + src/input/input.ts + src/input/terminalKeyboard.ts (+ tests), src/cli.ts, scripts/capture-keys.mjs
+Status: in progress (#37) · Depends on: TQ-016 · Scope: ~M · Touches: src/input/keyDecoder.ts + src/input/input.ts + src/input/terminalKeyboard.ts (+ tests), src/cli.ts, scripts/capture-keys.mjs
 
 ## Context
 [TQ-016](TQ-016-input-responsiveness.md) made held-direction movement responsive, but it rests on a workaround: because we assumed terminals emit key-DOWN only (no key-up), it *infers* release with a timeout (`HELD_WINDOW_MS`). That inference has an unavoidable cost — a bounded **coast after release** — and is only a best-effort guess.
