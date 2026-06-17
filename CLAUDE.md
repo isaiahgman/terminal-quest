@@ -69,6 +69,8 @@ The **pure logic modules** in `src/game/` (e.g. `rng.ts`, `world/generate.ts`, `
 - Save the **world seed**, not the tile array (world is deterministic from seed).
 
 ## Current status
-**Merged:** TQ-000 scaffold · TQ-001 tile renderer + state + camera · TQ-002/003 game loop + movement + following camera · seeded RNG · TQ-004 procedural world *generator* (#12/#13) · TQ-005 enemy AI module (#29) · TQ-006 combat engine (#10) · CI pipeline · linter + overnight test-coverage/fix batch.
-**Open PRs:** `#25` wire world-gen + spawn into cli (TQ-004b) · `#32` responsive held-direction movement (TQ-016).
-**Next:** after the open PRs land — TQ-007 attack types, TQ-008 HUD, TQ-009 leveling — the MVP cut line.
+**Canonical status lives in the artifacts** — read each `TQ-NNN` `Status:` line in `docs/plan/` (and `docs/plan/README.md` for the phased order). Don't hand-maintain a per-PR list here; it drifts every batch. The summary below is orientation only.
+
+- **Playable today:** tile world + following camera, procedural world-gen wired into the running game (TQ-004), responsive held-direction movement (TQ-016).
+- **Pure modules — *not yet wired* into `update`/`state`/render:** enemy AI (`enemy.ts`, TQ-005), combat (`combat.ts`, TQ-006), attack types (TQ-007), leveling (`progression.ts`, TQ-009). They pass their unit tests but don't yet affect the running game — wiring them into the loop is the next integration work.
+- **Next:** the remaining MVP-cut artifacts still marked `ready` in `docs/plan/` (e.g. TQ-008 HUD, TQ-017 diagonal movement) plus the integration above.
