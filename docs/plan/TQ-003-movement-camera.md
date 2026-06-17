@@ -12,7 +12,7 @@ Merged means: arrow/WASD moves the player around a world larger than the screen,
 - [ ] Player entity moves on the grid in response; movement happens in `update()`
 - [ ] Camera centers on the player and **clamps** at world edges (no black past bounds)
 - [ ] Renderer draws only the camera viewport; a larger-than-screen world scrolls smoothly
-- [ ] `pnpm typecheck` passes
+- [ ] `npm run typecheck` passes
 
 ## Plan
 1. Add `player.pos` to state.
