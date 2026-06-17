@@ -1,5 +1,5 @@
-# PR-016 — Responsive held-direction movement (decouple from OS key-repeat)
-Status: in progress · Depends on: PR-003 · Scope: ~S · Touches: src/input/input.ts (+ src/input/input.test.ts), maybe src/game/config.ts
+# TQ-016 — Responsive held-direction movement (decouple from OS key-repeat)
+Status: in progress (#32) · Depends on: TQ-003 · Scope: ~S · Touches: src/input/input.ts (+ src/input/input.test.ts), maybe src/game/config.ts
 
 ## Context
 Beta-test feedback (2026-06-15): holding a direction works, but movement **fires once, stalls for ~½–1 s, then starts repeating**. Root cause is the input model in [`src/input/input.ts`](../../src/input/input.ts): it's "repeat on press" and leans on the **OS keyboard auto-repeat** stream to keep moving. Terminals emit key-DOWN only (no key-up — [tdd input gotcha](../tdd.md)), and the OS inserts a long *initial-repeat delay* before auto-repeat kicks in. That gap is the stall: first press → one move → silence until the OS starts repeating → continuous. The movement cadence is also hostage to each user's OS keyboard settings instead of the game's 15 fps tick.
@@ -27,6 +27,6 @@ Merged means: pressing and holding a direction starts moving on the next tick an
 
 ## Notes
 - Terminals have no key-up *in the legacy model*, so here "release" is inferred by timeout — there's an unavoidable short **coast after release** (~one window). Document the chosen window; it's the cost of removing the stall. (If coast feels bad, the lever is window size, not architecture.)
-- **This is the *fallback* tier.** During implementation we found modern terminals can report real key-release via the kitty keyboard protocol, which removes the coast entirely — see [`tdd.md` §12](../tdd.md). That's [PR-018](PR-018-kitty-keyboard-release.md) (the no-coast primary tier); this ticket is the graceful fallback for terminals without protocol support. Both feed the same `Intent` seam, so 018 plugs into the held-set this PR introduces without touching the loop or sim.
+- **This is the *fallback* tier.** During implementation we found modern terminals can report real key-release via the kitty keyboard protocol, which removes the coast entirely — see [`tdd.md` §12](../tdd.md). That's [TQ-018](TQ-018-kitty-keyboard-release.md) (the no-coast primary tier); this ticket is the graceful fallback for terminals without protocol support. Both feed the same `Intent` seam, so TQ-018 plugs into the held-set this work introduces without touching the loop or sim.
 - Held-set ordering: re-seat a re-pressed direction as the most recent (delete-then-set) so the freshest press wins when `update()` takes the last intent — otherwise a quick reversal sticks on the prior direction until it times out.
-- Pairs with [PR-017](PR-017-diagonal-movement.md) (diagonals): the held-direction state this introduces is exactly what diagonal-combining needs, so do 016 first.
+- Pairs with [TQ-017](TQ-017-diagonal-movement.md) (diagonals): the held-direction state this introduces is exactly what diagonal-combining needs, so do 016 first.

@@ -60,7 +60,7 @@ describe('Input', () => {
     press('RIGHT');
     // The single keypress alone (no OS auto-repeat yet) must already move, and
     // keep moving each tick, all the way up to the held window. This is the bug
-    // PR-016 fixes: previously the gap before auto-repeat produced empty drains.
+    // TQ-016 fixes: previously the gap before auto-repeat produced empty drains.
     for (let t = SIM_DT; t <= HELD_WINDOW_MS; t += SIM_DT) {
       advance(SIM_DT);
       expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: 0 }]);
@@ -142,7 +142,7 @@ describe('Input', () => {
     advance(SIM_DT);
 
     // Both are still held, so both are emitted (in press order). Collapsing
-    // these into a single diagonal intent is PR-017's job, not this layer's yet.
+    // these into a single diagonal intent is TQ-017's job, not this layer's yet.
     expect(input.drain()).toEqual([
       { type: 'move', dx: 0, dy: -1 },
       { type: 'move', dx: 1, dy: 0 },

@@ -1,5 +1,5 @@
-# PR-014 — High-risk/high-reward dungeons
-Status: ready · Depends on: PR-011 · Scope: ~M · Touches: src/game/world/generate.ts, src/game/update.ts, src/data/enemies.ts
+# TQ-014 — High-risk/high-reward dungeons
+Status: ready · Depends on: TQ-011 · Scope: ~M · Touches: src/game/world/generate.ts, src/game/update.ts, src/data/enemies.ts
 
 ## Context
 Depth in the world ([prd §7](../prd.md#7-world--progression)): optional pockets with denser danger and better loot — the risk/reward choice that makes exploring meaningful.
@@ -11,7 +11,7 @@ Merged means: dungeon entrances exist in the world; entering swaps you into a de
 - [ ] Dungeon entrances are placed in the world and visibly distinct
 - [ ] Entering generates/loads a dungeon area with **higher enemy density + better drops**
 - [ ] Exiting (or clearing) returns the player to the prior world location
-- [ ] Dungeon state interacts cleanly with save (PR-012)
+- [ ] Dungeon state interacts cleanly with save (TQ-012)
 - [ ] `pnpm typecheck` passes
 
 ## Plan
@@ -23,4 +23,4 @@ Merged means: dungeon entrances exist in the world; entering swaps you into a de
 - Reuse the same combat/enemy/loot systems — a dungeon is tuned parameters + a context switch, not a new engine.
 
 ## Notes
-- A guaranteed good weapon drop makes dungeons worth the risk and feeds PR-010.
+- A guaranteed good weapon drop makes dungeons worth the risk and feeds TQ-010.

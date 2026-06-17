@@ -7,7 +7,7 @@
  * This module is intentionally **decoupled**: it defines the minimal
  * `Combatant` shape it needs rather than importing `Player`/`Enemy`, and takes
  * randomness as an injected function. That keeps the math buildable and fully
- * unit-testable ahead of the entity/loop wiring (PR-005/007), and honours the
+ * unit-testable ahead of the entity/loop wiring (TQ-005/007), and honours the
  * architecture bet — game math lives in pure, tested modules, never leaking
  * into render/input.
  *

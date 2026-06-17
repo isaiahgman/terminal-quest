@@ -2,15 +2,15 @@ import { RNG, Map as RotMap } from 'rot-js';
 import type { Tile, World } from '../state.js';
 
 /**
- * Procedural world generation (PR-004, [plan](../../../docs/plan/PR-004-procedural-world.md)).
+ * Procedural world generation (TQ-004, [plan](../../../docs/plan/TQ-004-procedural-world.md)).
  *
  * A cellular-automaton cave is grown with rot.js, then `connect()` carves
  * tunnels so every open tile belongs to a single traversable region — "open
  * world with cover," not a maze. Generation is **deterministic from the seed**:
  * we seed rot.js' RNG up front so the same seed always reproduces a
  * byte-identical world (we save the seed, not the tiles — see CLAUDE.md /
- * PR-012). Note this reseeds rot.js' *global* RNG as a side effect — fine while
- * generation is the only RNG consumer; PR-004b's `rng.ts` wrapper will localize
+ * TQ-012). Note this reseeds rot.js' *global* RNG as a side effect — fine while
+ * generation is the only RNG consumer; TQ-004b's `rng.ts` wrapper will localize
  * it so the output is pure, not just deterministic.
  *
  * This module is render/input-agnostic and returns a fresh `World`: it only
@@ -43,7 +43,7 @@ const SMOOTHING_PASSES = 4;
  * `seed` must be an integer. rot.js maps any seed `< 1` through `1/seed` before
  * use, so non-integer seeds alias (`0`, `NaN`, and `Infinity` all collapse to
  * the same stream, and `s` collides with `1/s`). Requiring an integer keeps the
- * seed→world mapping injective for the values we actually save (PR-012 resume).
+ * seed→world mapping injective for the values we actually save (TQ-012 resume).
  *
  * Guarantees (covered by tests): identical output for identical seed, every
  * `'floor'` tile reachable from every other (no isolated pockets), exact

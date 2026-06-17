@@ -1,5 +1,5 @@
-# PR-006 — Combat engine: radius + stamina + hit-chance (pure)
-Status: in progress · Depends on: PR-005 · Scope: ~M · Touches: src/game/combat.ts, src/game/combat.test.ts
+# TQ-006 — Combat engine: radius + stamina + hit-chance (pure)
+Status: merged (#10) · Depends on: TQ-005 · Scope: ~M · Touches: src/game/combat.ts, src/game/combat.test.ts
 
 ## Context
 The signature mechanic, as pure tested logic ([prd §6](../prd.md#6-combat--the-signature-system), [tdd §6](../tdd.md#6-combat-model)). This is the "attack complexity" ticket Isaiah asked to capture separately.
@@ -13,7 +13,7 @@ Merged means: given player + an attack spec, the engine resolves a **radius atta
 - [x] Stamina **regenerates** up to max via a `regenStamina(combatant, amount)` helper (caller computes `amount = rate * dt`)
 - [x] `combat.test.ts` covers: radius selection, hit-chance distribution (seeded), damage, stamina gating, regen — all deterministic
 - [x] `npm test` passes
-- [ ] ~~Enemy → player contact damage resolved here too~~ — **moved to PR-007** (needs the `Player`/`Enemy` entities this pure slice deliberately doesn't import; see Notes)
+- [ ] ~~Enemy → player contact damage resolved here too~~ — **moved to TQ-007** (needs the `Player`/`Enemy` entities this pure slice deliberately doesn't import; see Notes)
 
 ## Plan
 1. Define `AttackSpec { name, radius, damage, staminaCost, hitChance }`.
@@ -25,5 +25,5 @@ Merged means: given player + an attack spec, the engine resolves a **radius atta
 
 ## Notes
 - Keep `hitChance` per-enemy independent — that randomness within the radius is the intended texture.
-- **Decoupling decision (PR-006):** to build ahead of PR-005 without coupling, `combat.ts` defines its own minimal `Combatant` interface (no `Player`/`Enemy` import) and takes RNG as an injected function rather than threading `state`/`rng.ts`. The signature became `resolveAttack(attacker, targets, spec, rng)` instead of `(state, attack, rng)`. Player/Enemy are structurally compatible with `Combatant`, so PR-007 wires them in without changing this module.
-- **Contact damage moved to PR-007:** enemy → player contact damage needs the entity layer, so it lands with the loop/entity wiring, not in this pure-math slice.
+- **Decoupling decision (TQ-006):** to build ahead of TQ-005 without coupling, `combat.ts` defines its own minimal `Combatant` interface (no `Player`/`Enemy` import) and takes RNG as an injected function rather than threading `state`/`rng.ts`. The signature became `resolveAttack(attacker, targets, spec, rng)` instead of `(state, attack, rng)`. Player/Enemy are structurally compatible with `Combatant`, so TQ-007 wires them in without changing this module.
+- **Contact damage moved to TQ-007:** enemy → player contact damage needs the entity layer, so it lands with the loop/entity wiring, not in this pure-math slice.

@@ -1,0 +1,296 @@
+import { describe, it, expect } from 'vitest';
+import {
+  CHARGE_RADIUS,
+  CHARGE_SPEED_MULTIPLIER,
+  contactDamage,
+  createEnemyAi,
+  stepEnemy,
+} from './entities.js';
+import { createEnemy } from './enemy.js';
+import type { Vec2 } from './state.js';
+
+/** Walkable-everywhere predicate — the open-field default for movement tests. */
+const open = (): boolean => true;
+
+/** One tick of the 15 Hz sim loop, in seconds (matches SIM_DT = 1000 / 15). */
+const TICK = 1 / 15;
+
+describe('stepEnemy — advancing toward the player on a clock', () => {
+  it('moves toward the player even with zero player input', () => {
+    // Player is fixed; the enemy must still close the distance on its own.
+    const enemy = createEnemy('grunt', { x: 0, y: 0 });
+    const player: Vec2 = { x: 20, y: 0 };
+
+    const { enemy: moved } = stepEnemy(enemy, createEnemyAi(), player, open, 1);
+    // grunt speed 4 → ~4 tiles in a full second of budget.
+    expect(moved.pos.x).toBeGreaterThan(enemy.pos.x);
+  });
+
+  it('steps diagonally — closes both axes toward the player', () => {
+    const enemy = createEnemy('grunt', { x: 0, y: 0 });
+    const player: Vec2 = { x: 20, y: 20 };
+    const { enemy: moved } = stepEnemy(enemy, createEnemyAi(), player, open, 1);
+    expect(moved.pos.x).toBeGreaterThan(0);
+    expect(moved.pos.y).toBeGreaterThan(0);
+    expect(moved.pos.x).toBe(moved.pos.y); // perfect diagonal toward (20,20)
+  });
+
+  it('a faster enemy outpaces a slower one over the same dt', () => {
+    const player: Vec2 = { x: 50, y: 0 };
+    const ai = createEnemyAi();
+    const runner = stepEnemy(
+      createEnemy('runner', { x: 0, y: 0 }),
+      ai,
+      player,
+      open,
+      1,
+    ); // speed 8
+    const brute = stepEnemy(
+      createEnemy('brute', { x: 0, y: 0 }),
+      ai,
+      player,
+      open,
+      1,
+    ); // speed 2
+    expect(runner.enemy.pos.x).toBeGreaterThan(brute.enemy.pos.x);
+  });
+
+  it('banks sub-tile budget across ticks instead of rounding it away', () => {
+    // brute speed 2 over one 15 Hz tick = 0.133 tiles < 1 → no move, but banked.
+    const enemy = createEnemy('brute', { x: 0, y: 0 });
+    const player: Vec2 = { x: 20, y: 0 };
+    const first = stepEnemy(enemy, createEnemyAi(), player, open, TICK);
+    expect(first.enemy.pos).toEqual({ x: 0, y: 0 }); // not enough budget yet
+    expect(first.ai.moveBudget).toBeGreaterThan(0);
+
+    // Keep ticking; the banked budget must eventually produce a step.
+    let ai = first.ai;
+    let pos = first.enemy.pos;
+    let moved = false;
+    for (let i = 0; i < 30 && !moved; i++) {
+      const next = stepEnemy({ ...enemy, pos }, ai, player, open, TICK);
+      moved = next.enemy.pos.x > pos.x;
+      ai = next.ai;
+      pos = next.enemy.pos;
+    }
+    expect(moved).toBe(true);
+  });
+
+  it('takes multiple steps in one tick when budget exceeds one tile', () => {
+    // grunt speed 4 over a full second → ~4 tiles in a single call.
+    const enemy = createEnemy('grunt', { x: 0, y: 0 });
+    const { enemy: moved } = stepEnemy(
+      enemy,
+      createEnemyAi(),
+      { x: 20, y: 0 },
+      open,
+      1,
+    );
+    expect(moved.pos.x).toBe(4);
+  });
+});
+
+describe('stepEnemy — charge within the proximity threshold', () => {
+  it('switches to charge once inside CHARGE_RADIUS of the player', () => {
+    const enemy = createEnemy('grunt', { x: CHARGE_RADIUS, y: 0 });
+    const { ai } = stepEnemy(enemy, createEnemyAi(), { x: 0, y: 0 }, open, 0);
+    expect(ai.phase).toBe('charge');
+  });
+
+  it('stays in advance while still far from the player', () => {
+    const enemy = createEnemy('grunt', { x: CHARGE_RADIUS + 5, y: 0 });
+    const { ai } = stepEnemy(enemy, createEnemyAi(), { x: 0, y: 0 }, open, 0);
+    expect(ai.phase).toBe('advance');
+  });
+
+  it('charges faster than it advances — the multiplier scales the budget fill rate', () => {
+    // Over one sub-tile tick (neither moves yet) the same kind must bank budget
+    // CHARGE_SPEED_MULTIPLIER× faster in charge range than out of it. Comparing
+    // the banked budget isolates the fill rate from where the enemy happens to
+    // be relative to the player.
+    const player: Vec2 = { x: 0, y: 0 };
+
+    const charging = stepEnemy(
+      createEnemy('grunt', { x: CHARGE_RADIUS, y: 0 }), // inside the radius
+      createEnemyAi(),
+      player,
+      open,
+      TICK,
+    );
+    const advancing = stepEnemy(
+      createEnemy('grunt', { x: 100, y: 0 }), // far away → plain advance
+      createEnemyAi(),
+      player,
+      open,
+      TICK,
+    );
+
+    expect(charging.ai.phase).toBe('charge');
+    expect(advancing.ai.phase).toBe('advance');
+    expect(charging.enemy.pos).toEqual({ x: CHARGE_RADIUS, y: 0 }); // sub-tile: no move yet
+    expect(charging.ai.moveBudget).toBeCloseTo(
+      advancing.ai.moveBudget * CHARGE_SPEED_MULTIPLIER,
+    );
+  });
+
+  it('preserves the speed differential while charging — a runner out-charges a brute', () => {
+    // Both inside CHARGE_RADIUS of the player; the faster kind must still gain
+    // more ground. A flat per-tick lunge would tie them — the multiplier must
+    // not. Several ticks so the brute's sub-tile budget gets a chance to spend.
+    const player: Vec2 = { x: 0, y: 0 };
+    let runner = {
+      e: createEnemy('runner', { x: CHARGE_RADIUS, y: 0 }),
+      ai: createEnemyAi(),
+    }; // speed 8
+    let brute = {
+      e: createEnemy('brute', { x: CHARGE_RADIUS, y: 0 }),
+      ai: createEnemyAi(),
+    }; // speed 2
+    for (let i = 0; i < 3; i++) {
+      const r = stepEnemy(runner.e, runner.ai, player, open, TICK);
+      runner = { e: r.enemy, ai: r.ai };
+      const b = stepEnemy(brute.e, brute.ai, player, open, TICK);
+      brute = { e: b.enemy, ai: b.ai };
+    }
+    expect(runner.e.pos.x).toBeLessThan(brute.e.pos.x); // runner is nearer the player
+  });
+});
+
+describe('stepEnemy — walls and walkability', () => {
+  it('does not walk through a wall directly between it and the player', () => {
+    // Wall is the entire column x === 1; the enemy at x:0 cannot pass to x:2.
+    const blocked = (x: number): boolean => x !== 1;
+    const enemy = createEnemy('grunt', { x: 0, y: 0 });
+    const { enemy: moved } = stepEnemy(
+      enemy,
+      createEnemyAi(),
+      { x: 5, y: 0 },
+      blocked,
+      1,
+    );
+    expect(moved.pos.x).toBeLessThan(1);
+  });
+
+  it('slides horizontally along a wall when the diagonal is blocked', () => {
+    // Diagonal (1,1) blocked; horizontal is tried first, so it slides to (1,0).
+    // dt sized for exactly one step (grunt speed 4 → 4 * 0.3 = 1.2 budget).
+    const isWalkable = (x: number, y: number): boolean => !(x === 1 && y === 1);
+    const enemy = createEnemy('grunt', { x: 0, y: 0 });
+    const { enemy: moved } = stepEnemy(
+      enemy,
+      createEnemyAi(),
+      { x: 5, y: 5 },
+      isWalkable,
+      0.3,
+    );
+    expect(moved.pos).toEqual({ x: 1, y: 0 });
+  });
+
+  it('falls back to a vertical slide when both the diagonal and horizontal are blocked', () => {
+    // Diagonal (1,1) AND horizontal (1,0) blocked, vertical (0,1) open → slide
+    // on y. Exercises the second fallback branch the horizontal test can't.
+    const isWalkable = (x: number, y: number): boolean =>
+      !((x === 1 && y === 1) || (x === 1 && y === 0));
+    const enemy = createEnemy('grunt', { x: 0, y: 0 });
+    const { enemy: moved } = stepEnemy(
+      enemy,
+      createEnemyAi(),
+      { x: 5, y: 5 },
+      isWalkable,
+      0.3,
+    );
+    expect(moved.pos).toEqual({ x: 0, y: 1 });
+  });
+
+  it('holds station when boxed in on every nearer cell, banking only one step', () => {
+    // All three cells toward the player — diagonal (1,1), horizontal (1,0),
+    // vertical (0,1) — are walls, so nextCell returns `from` and the enemy
+    // cannot move at all. A full second of grunt budget (4 tiles) must NOT be
+    // hoarded: it is capped at one ready step.
+    const boxedIn = (x: number, y: number): boolean =>
+      !((x === 1 && y === 1) || (x === 1 && y === 0) || (x === 0 && y === 1));
+    const enemy = createEnemy('grunt', { x: 0, y: 0 });
+    const { enemy: moved, ai } = stepEnemy(
+      enemy,
+      createEnemyAi(),
+      { x: 5, y: 5 },
+      boxedIn,
+      1,
+    );
+    expect(moved.pos).toEqual({ x: 0, y: 0 });
+    expect(ai.moveBudget).toBe(1); // capped — not the 4 tiles it would have banked
+  });
+
+  it('does not hoard a teleport: a long block releases as a single step, not a burst', () => {
+    // Enemy pinned against a wall (the whole column x === 1) for many ticks,
+    // player straight to the right. Pre-fix the unspent budget grew unbounded
+    // (~5 tiles after 20 ticks) and the enemy would jump that far in one frame
+    // the moment the wall opened. The clamp must hold it to one step.
+    const player: Vec2 = { x: 5, y: 0 };
+    const wallColumn = (x: number): boolean => x !== 1;
+    let pinned = {
+      e: createEnemy('grunt', { x: 0, y: 0 }),
+      ai: createEnemyAi(),
+    };
+    for (let i = 0; i < 20; i++) {
+      const r = stepEnemy(pinned.e, pinned.ai, player, wallColumn, TICK);
+      pinned = { e: r.enemy, ai: r.ai };
+    }
+    expect(pinned.e.pos).toEqual({ x: 0, y: 0 }); // never got past the wall
+    expect(pinned.ai.moveBudget).toBeLessThanOrEqual(1); // budget capped, no hoard
+
+    // Wall opens; one tick may advance at most one tile, never the old burst.
+    const released = stepEnemy(pinned.e, pinned.ai, player, open, TICK);
+    expect(released.enemy.pos.x).toBe(1);
+  });
+});
+
+describe('stepEnemy — determinism & purity', () => {
+  it('is deterministic — identical inputs yield identical motion', () => {
+    const enemy = createEnemy('runner', { x: 2, y: 9 });
+    const player: Vec2 = { x: 40, y: 3 };
+    const a = stepEnemy(enemy, createEnemyAi(), player, open, TICK * 7);
+    const b = stepEnemy(enemy, createEnemyAi(), player, open, TICK * 7);
+    expect(a).toEqual(b);
+  });
+
+  it('does not mutate the input enemy or AI state', () => {
+    const enemy = createEnemy('grunt', { x: 0, y: 0 });
+    const ai = createEnemyAi();
+    stepEnemy(enemy, ai, { x: 9, y: 9 }, open, 1);
+    expect(enemy.pos).toEqual({ x: 0, y: 0 });
+    expect(ai).toEqual({ moveBudget: 0, phase: 'advance' });
+  });
+
+  it('holds station and banks nothing on a non-finite or non-positive dt', () => {
+    const enemy = createEnemy('grunt', { x: 3, y: 3 });
+    const ai = createEnemyAi();
+    for (const dt of [0, -1, NaN, Infinity]) {
+      const out = stepEnemy(enemy, ai, { x: 0, y: 0 }, open, dt);
+      expect(out.enemy.pos).toEqual({ x: 3, y: 3 });
+      expect(out.ai.moveBudget).toBe(0);
+    }
+  });
+});
+
+describe('contactDamage — standing still gets you chipped down', () => {
+  it('deals the enemy atk when adjacent to the player', () => {
+    const enemy = createEnemy('grunt', { x: 1, y: 0 });
+    expect(contactDamage(enemy, { x: 0, y: 0 })).toBe(enemy.atk);
+  });
+
+  it('deals atk diagonally adjacent too (8-neighbourhood)', () => {
+    const enemy = createEnemy('grunt', { x: 1, y: 1 });
+    expect(contactDamage(enemy, { x: 0, y: 0 })).toBe(enemy.atk);
+  });
+
+  it('deals atk when occupying the player cell', () => {
+    const enemy = createEnemy('brute', { x: 4, y: 4 });
+    expect(contactDamage(enemy, { x: 4, y: 4 })).toBe(enemy.atk);
+  });
+
+  it('deals nothing when more than one tile away', () => {
+    const enemy = createEnemy('grunt', { x: 2, y: 0 });
+    expect(contactDamage(enemy, { x: 0, y: 0 })).toBe(0);
+  });
+});

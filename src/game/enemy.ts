@@ -2,7 +2,7 @@
  * Enemy data model — pure data, no world/loop logic.
  *
  * This file owns the `Enemy` shape and a small, balanced table of enemy kinds.
- * Spawning, AI stepping, and rendering live elsewhere (PR-005 core / renderer)
+ * Spawning, AI stepping, and rendering live elsewhere (TQ-005 core / renderer)
  * so this module stays a dependency-free leaf the simulation can build on.
  *
  * Architecture note: the simulation layer must never import the render layer,
@@ -24,7 +24,7 @@ export interface Enemy {
   readonly kind: EnemyKind;
   /** Grid position. Mutated by the AI step in the sim layer. */
   pos: Vec2;
-  /** Current health; reaches 0 → dead. Mutated by combat (PR-006). */
+  /** Current health; reaches 0 → dead. Mutated by combat (TQ-006). */
   hp: number;
   /** Spawn health, for HUD bars and clamping heals. */
   readonly maxHp: number;
@@ -60,8 +60,8 @@ interface EnemyStats {
  *
  * Speed is in tiles/second; grunt's 4/s (a move every 0.25s) is the reference
  * pace. Numbers are deliberately small, round, and relative — concrete tuning
- * against player stats lands once enemies are wired into update() (PR-005 core)
- * and combat exists (PR-006).
+ * against player stats lands once enemies are wired into update() (TQ-005 core)
+ * and combat exists (TQ-006).
  */
 export const ENEMY_TYPES: Record<EnemyKind, EnemyStats> = Object.freeze({
   grunt: Object.freeze({

@@ -1,5 +1,5 @@
-# PR-011 — Bosses + win condition
-Status: ready · Depends on: PR-007, PR-009 · Scope: ~M · Touches: src/data/bosses.ts, src/game/entities.ts, src/game/update.ts
+# TQ-011 — Bosses + win condition
+Status: ready · Depends on: TQ-007, TQ-009 · Scope: ~M · Touches: src/data/bosses.ts, src/game/entities.ts, src/game/update.ts
 
 ## Context
 The goal of the game ([prd §7](../prd.md#7-world--progression)): 10 bosses scattered across the world; hard to reach, hard to beat; all 10 down = win.
@@ -23,4 +23,4 @@ Merged means: bosses exist as tough placed entities, defeating one increments pr
 - Bosses must be **data-driven** so reaching 10 is authoring, not engineering. Reuse enemy AI + combat engine; only the signature behavior is special.
 
 ## Notes
-- Tune so an under-leveled player loses but a ground-out player wins — that's the Solo-Leveling payoff. Validate against the PR-009 curve.
+- Tune so an under-leveled player loses but a ground-out player wins — that's the Solo-Leveling payoff. Validate against the TQ-009 curve.

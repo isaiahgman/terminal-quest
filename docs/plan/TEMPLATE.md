@@ -1,5 +1,5 @@
-# PR-NNN — <title>
-Status: ready · Depends on: <PR-xxx | none> · Scope: ~S/M · Touches: <paths>
+# TQ-NNN — <title>
+Status: ready · Depends on: <TQ-xxx | none> · Scope: ~S/M · Touches: <paths>
 
 ## Context
 Why this exists; links to [prd](../prd.md#...) / [tdd](../tdd.md#...) sections.
