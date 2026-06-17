@@ -14,10 +14,13 @@ import { Renderer } from './render/renderer.js';
 const term = terminalKit.terminal;
 
 /**
- * Pick a walkable spawn tile deterministically from the world seed. Draws from
- * the injected {@link Rng} (seeded off the same world seed) rather than the
- * global rot.js RNG, so the choice reproduces alongside the map — the same seed
- * always spawns the player on the same tile (matters for PR-012 resume).
+ * Pick a walkable spawn tile deterministically. Draws from the injected
+ * {@link Rng} (seeded off the world seed) rather than the global rot.js RNG, so
+ * the choice reproduces alongside the map — but only at a fixed world size: the
+ * walkable-tile list comes from a map sized to the terminal, so the same seed in
+ * a differently-sized terminal yields a different map and a different spawn.
+ * PR-012 resume must therefore persist the world width/height alongside the
+ * seed, not the seed alone.
  * `generateWorld` guarantees at least one floor tile, so the list is non-empty.
  */
 function pickSpawn(world: World, rng: Rng): Vec2 {
