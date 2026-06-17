@@ -1,4 +1,5 @@
 import { type GameState, isWalkable } from './state.js';
+import { createProgression, gainXp, xpForKill } from './progression.js';
 
 /** A player-issued action for one tick. (More variants land in later PRs.) */
 export interface MoveIntent {
@@ -43,9 +44,39 @@ export function update(
     }
   }
 
-  return {
+  const advanced: GameState = {
     ...state,
     player: { ...state.player, pos: { x, y } },
     tick: state.tick + 1,
+  };
+
+  // Kill → XP hook (TQ-009). An enemy whose hp has reached 0 (combat lands the
+  // killing blow in a later integration PR) is "slain": remove it from the world
+  // and award its XP to the player, levelling up across any thresholds crossed.
+  // No enemies or none slain ⇒ the movement-only result is returned untouched,
+  // keeping this hook a tiny, behaviour-preserving addition.
+  const enemies = advanced.enemies;
+  if (enemies === undefined) return advanced;
+
+  const slain = enemies.filter((enemy) => enemy.hp <= 0);
+  if (slain.length === 0) return advanced;
+
+  // Partition by membership, not the complementary `hp > 0` predicate: `hp <= 0`
+  // and `hp > 0` are *both* false for a non-finite hp, so a NaN-hp enemy would
+  // otherwise fall through both buckets and silently vanish. Keeping survivors as
+  // "everything not slain" leaves such an enemy in the world untouched.
+  const survivors = enemies.filter((enemy) => !slain.includes(enemy));
+
+  const awarded = slain.reduce((total, enemy) => total + xpForKill(enemy), 0);
+  return {
+    ...advanced,
+    player: {
+      ...advanced.player,
+      progress: gainXp(
+        advanced.player.progress ?? createProgression(),
+        awarded,
+      ),
+    },
+    enemies: survivors,
   };
 }
