@@ -4,7 +4,7 @@ import { KeyDecoder } from './keyDecoder.js';
 
 /**
  * Wires raw terminal input into {@link Input}, negotiating the **kitty keyboard
- * protocol** (TQ-018) when the terminal supports it.
+ * protocol** (TQ-019) when the terminal supports it.
  *
  * The input layer owns stdin directly rather than going through terminal-kit:
  * terminal-kit's key parser can't read the protocol's `CSI u` sequences (it

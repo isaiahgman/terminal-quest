@@ -2,7 +2,7 @@
 /**
  * Diagnostic: prints the raw bytes your terminal sends for each key with the
  * kitty keyboard protocol enabled — used to confirm/lock the arrow-key
- * codepoints in src/input/keyDecoder.ts (TQ-018).
+ * codepoints in src/input/keyDecoder.ts (TQ-019).
  *
  * Run it in the terminal you actually play in:  node scripts/capture-keys.mjs
  * Press the arrows + WASD (hold and release them), then press Ctrl-C to quit.

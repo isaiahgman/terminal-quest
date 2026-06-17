@@ -1,7 +1,7 @@
 /**
  * Decodes a raw terminal input byte-stream into normalised key events.
  *
- * This exists because the **kitty keyboard protocol** (TQ-018) reports real
+ * This exists because the **kitty keyboard protocol** (TQ-019) reports real
  * key-press/repeat/**release** events as `CSI u` escape sequences, and
  * `terminal-kit`'s parser does not understand them — it emits `'unknown'` and
  * aborts the chunk (see tdd §12). So when the protocol is active the input

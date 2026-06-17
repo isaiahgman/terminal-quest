@@ -1,4 +1,4 @@
-# TQ-018 — Real key-release via the kitty keyboard protocol (progressive enhancement)
+# TQ-019 — Real key-release via the kitty keyboard protocol (progressive enhancement)
 Status: in progress (#37) · Depends on: TQ-016 · Scope: ~M · Touches: src/input/keyDecoder.ts + src/input/input.ts + src/input/terminalKeyboard.ts (+ tests), src/cli.ts, scripts/capture-keys.mjs
 
 ## Context
