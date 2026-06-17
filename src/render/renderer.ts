@@ -43,13 +43,28 @@ export class Renderer {
       state.world.height,
     );
 
+    // One reusable put-options object for the viewport cell loop, so the hot
+    // loop allocates nothing per cell regardless of viewport size. Every glyph
+    // here defines a background, so `bgColor` is always set to a valid name
+    // before each put — important because terminal-kit's object2attr mutates
+    // this attr object in place (e.g. rewriting colour names to numeric
+    // indices); reassigning fresh valid values each iteration keeps it sound.
+    const cellOpts = {
+      x: 0,
+      y: 0,
+      attr: { color: '', bold: false, bgColor: '' },
+      wrap: false,
+      dx: 1,
+      dy: 0,
+    };
     for (let sy = 0; sy < height; sy++) {
       for (let sx = 0; sx < width; sx++) {
         const g = glyphForTile(tileAt(state.world, cam.x + sx, cam.y + sy));
-        this.screen.put(
-          { x: sx, y: sy, attr: cellAttr(g, false), wrap: false, dx: 1, dy: 0 },
-          g.char,
-        );
+        cellOpts.x = sx;
+        cellOpts.y = sy;
+        cellOpts.attr.color = g.color;
+        cellOpts.attr.bgColor = g.bg ?? '';
+        this.screen.put(cellOpts, g.char);
       }
     }
 

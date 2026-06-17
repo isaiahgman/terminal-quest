@@ -1,13 +1,13 @@
 import { performance } from 'node:perf_hooks';
 import { type GameState } from './state.js';
-import { type Rng } from './combat.js';
+import { type RngFn } from './combat.js';
 import { type Intent, SIM_DT, SIM_DT_SECONDS, update } from './update.js';
 
 export interface LoopHooks {
   /** Pull (and clear) the intents collected since the last tick. */
   drainIntents: () => readonly Intent[];
   /** Injected seeded randomness for the sim (attack rolls); see `combat.ts`. */
-  rng: Rng;
+  rng: RngFn;
   /** Draw the current state (read-only). */
   render: (state: GameState) => void;
   /** Return true to end the loop. */
@@ -40,10 +40,18 @@ export function runLoop(initial: GameState, hooks: LoopHooks): void {
     last = now;
 
     let advanced = false;
-    while (acc >= SIM_DT) {
-      state = update(state, hooks.drainIntents(), SIM_DT_SECONDS, hooks.rng);
-      acc -= SIM_DT;
-      advanced = true;
+    if (acc >= SIM_DT) {
+      // Drain once per frame, not per sub-step: a multi-step catch-up frame must
+      // apply the same buffered intents to every step. Draining inside the loop
+      // would feed the intents to the first step and an empty list to the rest.
+      // Guarded by `acc >= SIM_DT` so a sub-step frame (no step runs) never
+      // drains and silently discards intents that arrived too early.
+      const intents = hooks.drainIntents();
+      while (acc >= SIM_DT) {
+        state = update(state, intents, SIM_DT_SECONDS, hooks.rng);
+        acc -= SIM_DT;
+        advanced = true;
+      }
     }
 
     if (advanced) hooks.render(state);

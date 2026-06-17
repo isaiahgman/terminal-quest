@@ -12,7 +12,7 @@ Merged means: bosses exist as tough placed entities, defeating one increments pr
 - [ ] Bosses are placed at fixed/seeded world locations (not random swarm spawns)
 - [ ] Defeating a boss sets `defeated` and increments `bossesDefeated`; HUD reflects `n/10`
 - [ ] Defeating **all** bosses triggers a victory state
-- [ ] Adding the remaining bosses is pure data (no code change); `pnpm typecheck` passes
+- [ ] Adding the remaining bosses is pure data (no code change); `npm run typecheck` passes
 
 ## Plan
 1. Boss type extends Enemy; author 1–2 fully, leave data slots for 10.

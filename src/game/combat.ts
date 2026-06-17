@@ -12,7 +12,8 @@
  * into render/input.
  *
  * Purity contract: every function returns new objects and never mutates its
- * inputs. No I/O, no rendering, and **no `Math.random`** — pass a seeded `Rng`.
+ * inputs. No I/O, no rendering, and **no `Math.random`** — pass a seeded
+ * `RngFn`.
  */
 
 /**
@@ -53,7 +54,7 @@ export interface AttackSpec {
  * Injected source of randomness: returns a float in `[0, 1)`, exactly like
  * `Math.random` but seedable so combat is deterministic and testable.
  */
-export type Rng = () => number;
+export type RngFn = () => number;
 
 /** Per-target outcome of an attack, by index into the `targets` array. */
 export interface HitOutcome {
@@ -129,7 +130,7 @@ export function resolveAttack(
   attacker: Combatant,
   targets: readonly Combatant[],
   spec: AttackSpec,
-  rng: Rng,
+  rng: RngFn,
 ): AttackResult {
   if (attacker.stamina < spec.staminaCost) {
     return {
