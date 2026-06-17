@@ -11,7 +11,7 @@ Merged means: a live HUD shows health, stamina, level/XP, and boss-progress, upd
 - [ ] HUD renders **health bar**, **stamina bar**, **level + XP**, and **bosses defeated / 10**
 - [ ] Bars update every tick as values change (stamina visibly drains/regens)
 - [ ] HUD overlays without corrupting the world viewport (fixed region, e.g., bottom rows)
-- [ ] Read-only from state; `pnpm typecheck` passes
+- [ ] Read-only from state; `npm run typecheck` passes
 
 ## Plan
 1. `hud.ts` draws bars/text into a reserved screen region.
