@@ -12,7 +12,7 @@ Merged means: kills grant XP, XP levels you up, level-ups grow your stats — an
 - [ ] Killing an enemy awards XP; crossing the threshold levels up and increases stats
 - [ ] Curve documented with the intended *feel* (early grind → later power spike)
 - [ ] `progression.test.ts` covers: xp accrual, multi-level-up in one gain, stat growth, curve monotonicity
-- [ ] `pnpm test` passes
+- [ ] `npm run test` passes
 
 ## Plan
 1. Implement pure progression fns + curve constants in `config.ts`.
