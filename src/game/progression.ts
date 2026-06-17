@@ -46,6 +46,11 @@ export interface Progression {
   readonly atk: number;
 }
 
+// TODO(config): these knobs are inline (mirroring `combat.ts`/`enemy.ts`, which
+// also keep their constants co-located). If a shared `config.ts` is later
+// introduced for balance tuning, migrate progression's and combat's knobs
+// together in a dedicated refactor and bless the pattern in CLAUDE.md.
+
 /** Level-1 starting stats — the baseline every other number is tuned against. */
 export const BASE_HP = 20;
 export const BASE_STAMINA = 10;
