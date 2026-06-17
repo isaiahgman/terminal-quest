@@ -206,6 +206,23 @@ describe('resolveAttack — damage math', () => {
     expect(result.outcomes[0]!.damage).toBe(1);
     expect(result.targets[0]!.hp).toBe(29);
   });
+
+  it('lets overkill drive hp negative rather than clamping it to 0', () => {
+    // 3 hp hit for 7 (base 5 + atk 2) ⇒ -4. hp is NOT clamped at 0: the sign of
+    // the result is the contract that *future* death detection will read — a
+    // dead combatant is hp <= 0, so the engine must preserve the negative
+    // remainder. Nothing consumes that boundary yet (enemy.ts only documents
+    // "reaches 0 → dead"); clamping here would pre-emptively erase the signal.
+    const target = makeTarget(0, 0, { hp: 3 });
+    const result = resolveAttack(
+      makeAttacker({ atk: 2 }),
+      [target],
+      SPEC,
+      scriptedRng([0.0]),
+    );
+    expect(result.outcomes[0]!.damage).toBe(7);
+    expect(result.targets[0]!.hp).toBe(-4);
+  });
 });
 
 describe('resolveAttack — stamina', () => {
