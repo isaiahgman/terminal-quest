@@ -11,18 +11,18 @@ import {
 import { createEnemy, type EnemyKind } from './enemy.js';
 import { createEnemyAi } from './entities.js';
 import { createProgression, xpForKill, xpToNext } from './progression.js';
-import type { Rng } from './combat.js';
+import type { RngFn } from './combat.js';
 
 /** One tick in seconds — the unit `update` advances the sim by. */
 const TICK = SIM_DT_SECONDS;
 
 /** RNG that throws on any call — proves a tick consumed no randomness. */
-const noRng: Rng = () => {
+const noRng: RngFn = () => {
   throw new Error('rng must not be called');
 };
 
 /** A scriptable RNG: yields queued rolls in order, throwing if over-drawn. */
-function scriptedRng(values: number[]): Rng {
+function scriptedRng(values: number[]): RngFn {
   let i = 0;
   return () => {
     if (i >= values.length)
