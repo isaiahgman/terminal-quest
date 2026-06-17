@@ -16,7 +16,9 @@
  * Speed is in tiles/second (matching `ENEMY_TYPES`); a per-enemy fractional
  * **move budget** accumulates `speed * dt` each tick and spends one whole tile
  * of budget per step, so a `speed: 8` runner outpaces a `speed: 2` brute on the
- * same clock regardless of the loop's tick rate.
+ * same clock regardless of the loop's tick rate. Within {@link CHARGE_RADIUS}
+ * the fill rate is scaled by {@link CHARGE_SPEED_MULTIPLIER} — a faster
+ * press-in that still respects each kind's relative speed.
  *
  * Purity contract: every function returns new objects and never mutates its
  * inputs (mirroring `combat.ts`).
@@ -34,23 +36,37 @@ import type { Vec2 } from './state.js';
 export const CHARGE_RADIUS = 4;
 
 /**
+ * How much faster an enemy moves while charging vs. advancing: its tiles/sec
+ * speed is multiplied by this inside {@link CHARGE_RADIUS}. A *multiplier* (not
+ * a flat "one tile per tick") so the charge stays faster than the advance while
+ * preserving each kind's relative speed and the budget's tick-rate independence
+ * — a runner still out-charges a brute, and the pace doesn't change if the
+ * sim's tick rate does (see TDD §12). One honest tuning knob: raise it for
+ * scarier charges.
+ */
+export const CHARGE_SPEED_MULTIPLIER = 2;
+
+/**
  * Per-enemy AI bookkeeping the stepper carries between ticks. Kept separate
  * from {@link Enemy} (pure stats/position data) so the model stays a
  * serializable leaf; the simulation owns one of these per live enemy.
  */
 export interface EnemyAi {
   /**
-   * Unspent fraction of a tile, in `[0, 1)`. Each tick adds `speed * dt` and
-   * the enemy steps once per whole tile of accumulated budget, so sub-tile
-   * speeds advance smoothly across ticks instead of being rounded away.
+   * Unspent fraction of a tile, normally in `[0, 1)`: each tick adds
+   * `speed * dt` and the enemy steps once per whole tile of accumulated budget,
+   * so sub-tile speeds advance smoothly across ticks instead of being rounded
+   * away. Pinned at `1` (one step ready) when the enemy is blocked or already
+   * on the player and can't spend it — capped there so a long block can't hoard
+   * a multi-tile teleport.
    */
   moveBudget: number;
   /**
    * Current behaviour, decided from the **pre-move** proximity each step:
    * `advance` while far (greedy budgeted steps toward the player, blocked by
-   * walls), `charge` once within {@link CHARGE_RADIUS} — which both labels the
-   * commit and drives a guaranteed one-tile lunge this tick (see
-   * {@link stepEnemy}). Exposed so the renderer/HUD can react to a charging
+   * walls), `charge` once within {@link CHARGE_RADIUS} — which scales the move
+   * budget's fill rate by {@link CHARGE_SPEED_MULTIPLIER} for a faster press-in
+   * (see {@link stepEnemy}). Exposed so the renderer/HUD can react to a charging
    * swarm (prd §9 juice, later).
    */
   phase: 'advance' | 'charge';
@@ -86,8 +102,8 @@ export interface EnemyStep {
  * vertical — so a wall corner deflects an enemy along it instead of freezing
  * it. Returns `from` unchanged when already on the target or when no nearer
  * cell is walkable. Phase-agnostic: both `advance` and `charge` use the same
- * slide here; charge's commitment is expressed as a guaranteed lunge in
- * {@link stepEnemy}, not by changing cell selection.
+ * slide here; charge's extra pressure is expressed as a higher move-budget fill
+ * rate in {@link stepEnemy}, not by changing cell selection.
  */
 function nextCell(
   from: Vec2,
@@ -122,26 +138,22 @@ function nextCell(
  *
  * The **phase** is decided up front from the enemy's **pre-move** Chebyshev
  * distance to `target`: `charge` if it is already within {@link CHARGE_RADIUS},
- * otherwise `advance`. The decision is made before moving so it can drive *this*
- * tick's motion rather than merely describe its outcome.
+ * otherwise `advance`. Charging scales the move budget's fill rate by
+ * {@link CHARGE_SPEED_MULTIPLIER}, so the phase drives *this* tick's motion
+ * rather than merely labelling its outcome.
  *
- * Movement has two parts:
- * 1. **Budgeted stepping (both phases).** Banks `enemy.speed * dt` into the
- *    move budget, then spends whole tiles of budget stepping greedily toward
- *    the player — multiple cells in one tick for a fast enemy, none for a slow
- *    one whose budget hasn't reached 1 yet.
- * 2. **The charge lunge (charge phase only).** While charging, the enemy
- *    commits to a guaranteed single step toward the player this tick *even if*
- *    the budget hasn't reached a whole tile — so a slow brute that would
- *    otherwise just bank sub-tile budget instead presses in one tile per tick
- *    once you're in range. The lunge consumes up to one tile of budget but
- *    clamps at 0 (it never drives the budget negative); if budgeted stepping
- *    already moved this tick, the lunge is a no-op (no double-step).
+ * Movement banks `speed * dt` (the charge multiplier folded into `speed`) into
+ * the move budget, then spends whole tiles of budget stepping greedily toward
+ * the player — multiple cells in one tick for a fast enemy, none for a slow one
+ * whose budget hasn't reached 1 yet. Any leftover is clamped to at most one
+ * ready step (`<= 1`): a blocked or already-arrived enemy that can't spend its
+ * budget banks a single step, never a multi-tile hoard that would release as a
+ * teleport the moment a path opens (the per-enemy twin of the loop's
+ * spiral-of-death clamp; see DECISIONS.md / TDD §12).
  *
- * A non-finite or non-positive `dt` banks nothing, lunges not, and the enemy
- * holds station — the budget is never poisoned to `NaN` (which would freeze the
- * enemy forever, `NaN >= 1` being false). Pure: `enemy` and `ai` are never
- * mutated.
+ * A non-finite or non-positive `dt` banks nothing and the enemy holds station —
+ * the budget is never poisoned to `NaN` (which would freeze the enemy forever,
+ * `NaN >= 1` being false). Pure: `enemy` and `ai` are never mutated.
  */
 export function stepEnemy(
   enemy: Enemy,
@@ -154,34 +166,31 @@ export function stepEnemy(
   const phase: EnemyAi['phase'] =
     chebyshev(enemy.pos, target) <= CHARGE_RADIUS ? 'charge' : 'advance';
 
-  const gained = live ? enemy.speed * dt : 0;
+  // Charging fills the budget faster (a real, speed-respecting press-in)
+  // instead of forcing a flat one-tile-per-tick lunge — see TDD §12.
+  const speed =
+    phase === 'charge' ? enemy.speed * CHARGE_SPEED_MULTIPLIER : enemy.speed;
+
+  const gained = live ? speed * dt : 0;
   let budget = ai.moveBudget + gained;
   let pos: Vec2 = { x: enemy.pos.x, y: enemy.pos.y };
-  let stepped = false;
 
   // Spend whole tiles of budget, stepping toward the player each one. Stop
-  // early if a step makes no progress (walled in) so the budget banks rather
-  // than burning uselessly against a wall.
+  // early if a step makes no progress (walled in, or already on the player) so
+  // the budget banks rather than burning uselessly against a wall.
   while (budget >= 1) {
     const next = nextCell(pos, target, isWalkable);
     if (next.x === pos.x && next.y === pos.y) break;
     pos = next;
     budget -= 1;
-    stepped = true;
     if (pos.x === target.x && pos.y === target.y) break;
   }
 
-  // Charge lunge: when in range and alive this tick, guarantee one step even on
-  // a sub-tile budget — but only if budgeted stepping didn't already move us
-  // (no double-step) and the cell is actually reachable. Clamp the budget at 0
-  // so the lunge can borrow at most a partial tile, never going negative.
-  if (live && phase === 'charge' && !stepped) {
-    const next = nextCell(pos, target, isWalkable);
-    if (next.x !== pos.x || next.y !== pos.y) {
-      pos = next;
-      budget = Math.max(0, budget - 1);
-    }
-  }
+  // Clamp leftover budget to one ready step. A blocked or arrived enemy can't
+  // spend it, so without this it would accumulate every tick and then dump the
+  // whole hoard in a single frame when the path opens — a teleport. Capped, it
+  // keeps exactly one step ready and no more.
+  budget = Math.min(budget, 1);
 
   return {
     enemy: { ...enemy, pos },

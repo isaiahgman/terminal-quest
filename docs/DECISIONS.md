@@ -14,6 +14,7 @@ A running log of the meaningful choices and the lessons learned building Termina
 - **Pure sim ⟂ read-only render ⟂ input** — the load-bearing bet. Pure modules are unit-tested; the renderer can be upgraded (juice) without touching game rules.
 - **Determinism** — one injected seeded RNG, never `Math.random`. Save the **seed + RNG state**, not the tiles (the world regenerates from seed).
 - **Loop** — fixed-timestep accumulator with a max-frame clamp (anti spiral-of-death); pass a constant `SIM_DT`, not wall-clock.
+- **Enemy movement is the same accumulator, and needs the same clamp** — each enemy banks `speed * dt` and steps per whole tile (sub-tile speeds on a discrete grid). A blocked enemy can't spend its budget, so it must be clamped to one ready step (`<= 1`) or it hoards and teleports when freed — the per-enemy twin of the loop's spiral-of-death clamp. **Charge is a speed *multiplier* (`CHARGE_SPEED_MULTIPLIER`), not a per-tick lunge:** a floor flattens every kind to tick-rate speed and erases the speed stat in close range; a gain keeps the per-kind spread and stays tick-rate independent. (Both corrected in PR-005 review — see TDD §12.)
 - **Input** — terminals have **no key-up event**, so movement is "repeat on press" (each keydown + OS auto-repeat enqueues one intent, drained per tick).
 - **npm, not pnpm** — corepack's pnpm didn't activate on this machine; lockfile is `package-lock.json`.
 
