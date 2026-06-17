@@ -1,19 +1,35 @@
 import type { Tile } from '../game/state.js';
 
-/** Glyph + color for a thing on the grid. Color names are terminal-kit names. */
+/** Glyph + colours for one cell. Colour values are terminal-kit colour names. */
 export interface Glyph {
   char: string;
+  /** Foreground colour. */
   color: string;
+  /** Background colour; omitted = the terminal's default background. */
+  bg?: string;
 }
+
+/**
+ * Palette — the single source of truth for the game's visual identity.
+ * Tune the look here; nothing else in the render layer hard-codes a colour.
+ */
+const PALETTE = {
+  /** Recessive dotted ground so the eye reads it as empty, walkable space. */
+  floor: { char: '·', color: 'gray', bg: 'black' },
+  /** Solid, lit stone — a hatched block on a raised grey background. */
+  wall: { char: '▓', color: 'white', bg: 'brightBlack' },
+  /** Deliberately the brightest thing on screen, so it is instantly findable. */
+  player: { char: '@', color: 'brightYellow', bg: 'black' },
+} satisfies Record<string, Glyph>;
 
 export function glyphForTile(tile: Tile): Glyph {
   switch (tile) {
     case 'floor':
-      return { char: '·', color: 'gray' };
+      return PALETTE.floor;
     case 'wall':
-      return { char: '#', color: 'white' };
+      return PALETTE.wall;
   }
 }
 
-export const PLAYER_GLYPH = '@';
-export const PLAYER_COLOR = 'brightWhite';
+/** The player's glyph — high-contrast against every tile background. */
+export const PLAYER_GLYPH: Glyph = PALETTE.player;
