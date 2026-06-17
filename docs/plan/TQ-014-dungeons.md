@@ -12,7 +12,7 @@ Merged means: dungeon entrances exist in the world; entering swaps you into a de
 - [ ] Entering generates/loads a dungeon area with **higher enemy density + better drops**
 - [ ] Exiting (or clearing) returns the player to the prior world location
 - [ ] Dungeon state interacts cleanly with save (TQ-012)
-- [ ] `pnpm typecheck` passes
+- [ ] `npm run typecheck` passes
 
 ## Plan
 1. Mark entrances during world gen.
