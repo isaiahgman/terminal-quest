@@ -8,12 +8,12 @@ Beta-test feedback (2026-06-15): holding a direction works, but movement **fires
 Merged means: pressing and holding a direction starts moving on the next tick and **keeps moving smoothly with no mid-stall**, at the game's tick cadence — independent of the OS auto-repeat delay/rate.
 
 ## Acceptance
-- [ ] Holding a direction produces continuous movement with **no initial stall** (no "move once, pause, then go"); movement begins on the first tick after the keypress.
-- [ ] Movement cadence is driven by the game loop (`SIM_DT`, 15/s), not the OS key-repeat rate — verified by the input unit test, not by feel.
-- [ ] Releasing a key stops movement within a bounded, documented window (the coast-after-release tradeoff; see Notes).
-- [ ] The "held" window is a single **named constant** (tunable; lives in `config.ts` if that file exists, else top of `input.ts`).
-- [ ] `update()` stays pure and unchanged; all new logic is in the input layer. Intents remain the only thing crossing into the sim.
-- [ ] `npm run check` green (typecheck + strict lint + tests), incl. new `input.test.ts` cases. No rule disables.
+- [x] Holding a direction produces continuous movement with **no initial stall** (no "move once, pause, then go"); movement begins on the first tick after the keypress.
+- [x] Movement cadence is driven by the game loop (`SIM_DT`, 15/s), not the OS key-repeat rate — verified by the input unit test, not by feel.
+- [x] Releasing a key stops movement within a bounded, documented window (the coast-after-release tradeoff; see Notes).
+- [x] The "held" window is a single **named constant** (`HELD_WINDOW_MS`, top of `input.ts` — `config.ts` does not exist yet, so per the criterion it lives there).
+- [x] `update()` stays pure and unchanged; all new logic is in the input layer. Intents remain the only thing crossing into the sim.
+- [x] `npm run check` green (typecheck + strict lint + tests), incl. new `input.test.ts` cases. No rule disables.
 
 ## Plan
 1. Replace the fire-and-forget intent buffer with **held-direction state**: each key event records the direction + a "last seen at" tick/timestamp.
@@ -26,5 +26,7 @@ Merged means: pressing and holding a direction starts moving on the next tick an
 - No `eslint-disable`/`any`/`@ts-ignore`. Inject the clock (don't call `performance.now()` straight in logic) so the behaviour is testable.
 
 ## Notes
-- Terminals have no key-up, so "release" is inferred by timeout — there's an unavoidable short **coast after release** (~one window). Document the chosen window; it's the cost of removing the stall. (If coast feels bad, the lever is window size, not architecture.)
+- Terminals have no key-up *in the legacy model*, so here "release" is inferred by timeout — there's an unavoidable short **coast after release** (~one window). Document the chosen window; it's the cost of removing the stall. (If coast feels bad, the lever is window size, not architecture.)
+- **This is the *fallback* tier.** During implementation we found modern terminals can report real key-release via the kitty keyboard protocol, which removes the coast entirely — see [`tdd.md` §12](../tdd.md). That's [TQ-018](TQ-018-kitty-keyboard-release.md) (the no-coast primary tier); this ticket is the graceful fallback for terminals without protocol support. Both feed the same `Intent` seam, so TQ-018 plugs into the held-set this work introduces without touching the loop or sim.
+- Held-set ordering: re-seat a re-pressed direction as the most recent (delete-then-set) so the freshest press wins when `update()` takes the last intent — otherwise a quick reversal sticks on the prior direction until it times out.
 - Pairs with [TQ-017](TQ-017-diagonal-movement.md) (diagonals): the held-direction state this introduces is exactly what diagonal-combining needs, so do 016 first.
