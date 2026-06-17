@@ -9,7 +9,10 @@ import { generateWorld } from './game/world/generate.js';
 import { Rng } from './game/rng.js';
 import { runLoop } from './game/loop.js';
 import { Input } from './input/input.js';
-import { startKeyboard, type KeyboardHandle } from './input/terminalKeyboard.js';
+import {
+  startKeyboard,
+  type KeyboardHandle,
+} from './input/terminalKeyboard.js';
 import { Renderer } from './render/renderer.js';
 
 const term = terminalKit.terminal;

@@ -102,7 +102,11 @@ function kindFromEventType(eventType: number | undefined): KeyKind {
 function decodeCsi(params: string, final: string): KeyEvent | undefined {
   // Query/response sequences (e.g. the `CSI ? <flags> u` protocol reply) start
   // with a private marker — never a key.
-  if (params.startsWith('?') || params.startsWith('>') || params.startsWith('=')) {
+  if (
+    params.startsWith('?') ||
+    params.startsWith('>') ||
+    params.startsWith('=')
+  ) {
     return undefined;
   }
 
@@ -142,7 +146,8 @@ export class KeyDecoder {
 
   /** Decode one chunk, returning every complete event it contains. */
   decode(chunk: Buffer | string): KeyEvent[] {
-    this.pending += typeof chunk === 'string' ? chunk : chunk.toString('latin1');
+    this.pending +=
+      typeof chunk === 'string' ? chunk : chunk.toString('latin1');
     const events: KeyEvent[] = [];
 
     let i = 0;
@@ -170,7 +175,8 @@ export class KeyDecoder {
         let j = i + 2;
         while (
           j < buf.length &&
-          (buf.charCodeAt(j) < CSI_FINAL_MIN || buf.charCodeAt(j) > CSI_FINAL_MAX)
+          (buf.charCodeAt(j) < CSI_FINAL_MIN ||
+            buf.charCodeAt(j) > CSI_FINAL_MAX)
         ) {
           j += 1;
         }

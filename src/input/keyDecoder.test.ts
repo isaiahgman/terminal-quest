@@ -23,9 +23,15 @@ describe('KeyDecoder — kitty CSI u key events', () => {
 
   it('decodes the arrow functional codepoints with event types', () => {
     expect(decode(`${CSI}57297;1:1u`)).toEqual([{ name: 'UP', kind: 'press' }]);
-    expect(decode(`${CSI}57298;1:3u`)).toEqual([{ name: 'DOWN', kind: 'release' }]);
-    expect(decode(`${CSI}57299;1:1u`)).toEqual([{ name: 'RIGHT', kind: 'press' }]);
-    expect(decode(`${CSI}57300;1:3u`)).toEqual([{ name: 'LEFT', kind: 'release' }]);
+    expect(decode(`${CSI}57298;1:3u`)).toEqual([
+      { name: 'DOWN', kind: 'release' },
+    ]);
+    expect(decode(`${CSI}57299;1:1u`)).toEqual([
+      { name: 'RIGHT', kind: 'press' },
+    ]);
+    expect(decode(`${CSI}57300;1:3u`)).toEqual([
+      { name: 'LEFT', kind: 'release' },
+    ]);
   });
 
   it('decodes the legacy / letter-terminated arrow form, with and without params', () => {
@@ -84,6 +90,8 @@ describe('KeyDecoder — robustness', () => {
   it('buffers a lone trailing ESC until its sequence arrives', () => {
     const decoder = new KeyDecoder();
     expect(decoder.decode(ESC)).toEqual([]);
-    expect(decoder.decode(`[57297;1:1u`)).toEqual([{ name: 'UP', kind: 'press' }]);
+    expect(decoder.decode(`[57297;1:1u`)).toEqual([
+      { name: 'UP', kind: 'press' },
+    ]);
   });
 });

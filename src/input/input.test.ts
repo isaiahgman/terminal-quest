@@ -17,7 +17,8 @@ function makeInput(): {
 } {
   const clock = { ms: 0 };
   const input = new Input(() => clock.ms);
-  const fire = (name: string, kind: KeyKind): void => input.apply({ name, kind });
+  const fire = (name: string, kind: KeyKind): void =>
+    input.apply({ name, kind });
   return {
     input,
     press: (name) => fire(name, 'press'),
