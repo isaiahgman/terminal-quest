@@ -61,13 +61,22 @@ export function update(
   const slain = enemies.filter((enemy) => enemy.hp <= 0);
   if (slain.length === 0) return advanced;
 
+  // Partition by membership, not the complementary `hp > 0` predicate: `hp <= 0`
+  // and `hp > 0` are *both* false for a non-finite hp, so a NaN-hp enemy would
+  // otherwise fall through both buckets and silently vanish. Keeping survivors as
+  // "everything not slain" leaves such an enemy in the world untouched.
+  const survivors = enemies.filter((enemy) => !slain.includes(enemy));
+
   const awarded = slain.reduce((total, enemy) => total + xpForKill(enemy), 0);
   return {
     ...advanced,
     player: {
       ...advanced.player,
-      progress: gainXp(advanced.player.progress ?? createProgression(), awarded),
+      progress: gainXp(
+        advanced.player.progress ?? createProgression(),
+        awarded,
+      ),
     },
-    enemies: enemies.filter((enemy) => enemy.hp > 0),
+    enemies: survivors,
   };
 }

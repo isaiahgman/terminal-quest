@@ -115,7 +115,8 @@ export function applyLevelUp(progress: Progression): Progression {
     level,
     maxHp: progress.maxHp + gainFor(level, HP_GAIN_BASE, HP_GAIN_ACCEL),
     maxStamina:
-      progress.maxStamina + gainFor(level, STAMINA_GAIN_BASE, STAMINA_GAIN_ACCEL),
+      progress.maxStamina +
+      gainFor(level, STAMINA_GAIN_BASE, STAMINA_GAIN_ACCEL),
     atk: progress.atk + gainFor(level, ATK_GAIN_BASE, ATK_GAIN_ACCEL),
   };
 }
@@ -136,11 +137,10 @@ export function gainXp(progress: Progression, amount: number): Progression {
   }
 
   let current: Progression = { ...progress, xp: progress.xp + amount };
-  while (current.xp >= xpToNext(current.level)) {
-    current = applyLevelUp({
-      ...current,
-      xp: current.xp - xpToNext(current.level),
-    });
+  let threshold = xpToNext(current.level);
+  while (current.xp >= threshold) {
+    current = applyLevelUp({ ...current, xp: current.xp - threshold });
+    threshold = xpToNext(current.level);
   }
   return current;
 }
@@ -148,11 +148,11 @@ export function gainXp(progress: Progression, amount: number): Progression {
 /**
  * XP awarded for slaying an enemy, from the minimal stat slice this needs
  * (structurally an `Enemy`): tougher and harder-hitting enemies are worth more.
- * Floored at 1 so every kill grants progress.
+ * Floored at 1 so every kill grants progress. A non-finite stat yields 1 rather
+ * than `NaN` — `Math.max(1, NaN)` is `NaN`, which would poison a whole tick's XP
+ * batch sum and make `gainXp`'s finite-guard silently discard every other kill.
  */
 export function xpForKill(slain: { maxHp: number; atk: number }): number {
-  return Math.max(
-    1,
-    Math.round(slain.maxHp * XP_PER_MAX_HP + slain.atk * XP_PER_ATK),
-  );
+  const raw = slain.maxHp * XP_PER_MAX_HP + slain.atk * XP_PER_ATK;
+  return Number.isFinite(raw) ? Math.max(1, Math.round(raw)) : 1;
 }

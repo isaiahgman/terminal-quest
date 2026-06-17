@@ -79,6 +79,16 @@ describe('gainXp', () => {
     expect(next.atk).toBe(8); // 3 + 2 + 3
   });
 
+  it('crosses 3+ thresholds and applies the accelerating gains at each level', () => {
+    // 100 XP pays 20 + 30 + 45 (levels 2, 3, 4) and carries 5 toward level 5.
+    const next = gainXp(createProgression(), 100);
+    expect(next.level).toBe(4);
+    expect(next.xp).toBe(5);
+    expect(next.maxHp).toBe(44); // 20 + 5 + 8 + 11 (accel: +3 each level)
+    expect(next.maxStamina).toBe(22); // 10 + 3 + 4 + 5
+    expect(next.atk).toBe(12); // 3 + 2 + 3 + 4
+  });
+
   it('is a no-op for non-positive or non-finite amounts', () => {
     const start = createProgression();
     for (const bad of [0, -5, NaN, Infinity, -Infinity]) {
