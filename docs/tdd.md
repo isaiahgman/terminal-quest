@@ -7,7 +7,7 @@ Technical design for the product in [`prd.md`](prd.md). A real-time terminal act
 - **Rendering + input:** [`terminal-kit`](https://github.com/cronvel/terminal-kit) — its **ScreenBuffer** does fast, flicker-free full-screen redraws and handles keyboard input. (Alternative: `blessed`/`neo-blessed`.)
 - **Roguelike algorithms:** [`rot.js`](https://ondras.github.io/rot.js/) — procedural map generation, seeded RNG, FOV, pathfinding (A*/Dijkstra) when needed.
 - **Tests:** vitest (pure sim/combat/progression).
-- **Tooling:** pnpm; eslint + prettier (light).
+- **Tooling:** npm; eslint + prettier (light).
 - **Why not Ink?** React's reconcile model fits menus, not a 15-fps real-time game. terminal-kit's ScreenBuffer is the right tool for a game loop.
 
 ## 2. Architecture — three isolated layers
