@@ -46,6 +46,27 @@ export class Renderer {
       }
     }
 
+    // Enemies, drawn before the player so the player glyph stays on top when an
+    // enemy shares its cell. Each carries its own glyph/color (see `enemy.ts`),
+    // so the renderer stays data-driven — no per-kind switch here. Skip any that
+    // fall outside the viewport.
+    for (const { enemy } of state.enemies ?? []) {
+      const ex = enemy.pos.x - cam.x;
+      const ey = enemy.pos.y - cam.y;
+      if (ex < 0 || ey < 0 || ex >= width || ey >= height) continue;
+      this.screen.put(
+        {
+          x: ex,
+          y: ey,
+          attr: cellAttr({ char: enemy.glyph, color: enemy.color }, false),
+          wrap: false,
+          dx: 1,
+          dy: 0,
+        },
+        enemy.glyph,
+      );
+    }
+
     this.screen.put(
       {
         x: state.player.pos.x - cam.x,

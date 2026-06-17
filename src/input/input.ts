@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import terminalKit from 'terminal-kit';
 import type { Intent } from '../game/update.js';
+import { ATTACK_KEYS } from '../data/attacks.js';
 
 type Term = typeof terminalKit.terminal;
 
@@ -59,6 +60,13 @@ const DIRECTION_DELTA: Record<Direction, { dx: number; dy: number }> = {
  */
 export class Input {
   private readonly held = new Map<Direction, number>();
+  /**
+   * Attack intents pressed since the last drain. Unlike movement, attacks are
+   * one-shot — a press is a single swing, not a held state — so they queue here
+   * and are emitted (and cleared) once. Mashing queues several; the stamina gate
+   * in `update()`, not this layer, is what limits the mash.
+   */
+  private attackIntents: Intent[] = [];
   private quitRequested = false;
   private readonly now: () => number;
 
@@ -80,14 +88,20 @@ export class Input {
         // wins" actually true.
         this.held.delete(dir);
         this.held.set(dir, this.now());
+        return;
+      }
+      const attackId = ATTACK_KEYS[name];
+      if (attackId !== undefined) {
+        this.attackIntents.push({ type: 'attack', attackId });
       }
     });
   }
 
   /**
-   * Emit one move intent per still-held direction and expire stale ones.
-   * Re-emitting a held direction every tick is what keeps movement continuous
-   * between OS auto-repeat events (and through the initial-repeat gap).
+   * Emit one move intent per still-held direction and expire stale ones, then
+   * any attack intents pressed since the last drain. Re-emitting a held
+   * direction every tick keeps movement continuous between OS auto-repeat
+   * events (and through the initial-repeat gap); attacks fire exactly once.
    */
   drain(): Intent[] {
     const now = this.now();
@@ -100,6 +114,8 @@ export class Input {
       const delta = DIRECTION_DELTA[dir];
       intents.push({ type: 'move', dx: delta.dx, dy: delta.dy });
     }
+    intents.push(...this.attackIntents);
+    this.attackIntents = [];
     return intents;
   }
 

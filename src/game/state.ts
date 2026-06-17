@@ -5,7 +5,9 @@
  */
 
 import type { Enemy } from './enemy.js';
+import type { EnemyAi } from './entities.js';
 import type { Progression } from './progression.js';
+import { createProgression } from './progression.js';
 
 export interface Vec2 {
   x: number;
@@ -24,13 +26,30 @@ export interface World {
 
 export interface Player {
   pos: Vec2;
+  /** Current health; chipped by enemy contact, floored at 0 (ceiling: progress.maxHp). */
+  hp: number;
+  /** Current stamina; spent by attacks, regenerated each tick (ceiling: progress.maxStamina). */
+  stamina: number;
+  /** Defensive power subtracted from incoming attack damage (a `Combatant.def`). */
+  def: number;
   /**
-   * Leveling state and the stat ceilings it raises (TQ-009). Optional while the
-   * combat/loop integration rolls in incrementally: states that predate
-   * progression simply omit it, and {@link update} defaults a fresh level-1
-   * progression the first time XP is awarded.
+   * Leveling state and the stat ceilings it raises (TQ-009): `maxHp`,
+   * `maxStamina`, and `atk` all live here, so a level-up powers up attacks and
+   * raises the hp/stamina caps. Optional while integration rolls in
+   * incrementally — states that predate progression omit it, and the combat /
+   * XP paths in {@link update} default a fresh level-1 progression.
    */
   progress?: Progression;
+}
+
+/**
+ * A live enemy: pure `Enemy` stats/position paired with the per-enemy AI
+ * bookkeeping the stepper carries between ticks (`entities.ts`). Two plain
+ * objects so the whole thing stays serializable for save/load (TQ-012).
+ */
+export interface LiveEnemy {
+  enemy: Enemy;
+  ai: EnemyAi;
 }
 
 export interface GameState {
@@ -38,12 +57,34 @@ export interface GameState {
   player: Player;
   /**
    * Live enemies (TQ-005/006). Optional during incremental wiring — movement-only
-   * states omit it. The simulation removes any whose `hp` has reached 0 and
-   * converts them to player XP (TQ-009).
+   * states omit it. Each tick the simulation resolves attacks against them,
+   * advances them toward the player, removes any whose `hp` has reached 0, and
+   * converts the slain to player XP (TQ-009).
    */
-  enemies?: readonly Enemy[];
+  enemies?: readonly LiveEnemy[];
+  /**
+   * Set when the player tried to attack this tick but lacked the stamina — the
+   * data behind the brief "too tired" cue. The HUD surfaces it (TQ-008); for now
+   * it makes the stamina gate observable and testable.
+   */
+  tooTired: boolean;
   /** Monotonic simulation tick counter (set by the loop in TQ-002). */
   tick: number;
+}
+
+/**
+ * A fresh player at `pos`: full hp/stamina drawn from a level-1 {@link
+ * createProgression} (so the ceilings and the current values agree), no armour.
+ */
+export function createPlayer(pos: Vec2): Player {
+  const progress = createProgression();
+  return {
+    pos: { x: pos.x, y: pos.y },
+    hp: progress.maxHp,
+    stamina: progress.maxStamina,
+    def: 0,
+    progress,
+  };
 }
 
 /** Tile lookup that treats out-of-bounds as solid wall. */

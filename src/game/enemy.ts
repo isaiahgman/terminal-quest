@@ -30,6 +30,13 @@ export interface Enemy {
   readonly maxHp: number;
   /** Contact / attack damage dealt to the player. */
   readonly atk: number;
+  /**
+   * Defensive power subtracted from incoming attack damage — the `def` the
+   * combat engine's damage formula reads (`combat.ts`). Zero for every kind
+   * today, but kept here so the damage math has a single source of truth rather
+   * than the wiring layer hardcoding a default (enemy armour can land later).
+   */
+  readonly def: number;
   /** Movement rate in tiles per second (consumed against the loop's dt). */
   readonly speed: number;
   /** Single-character map glyph (rendering happens in the render layer). */
@@ -42,6 +49,7 @@ export interface Enemy {
 interface EnemyStats {
   readonly hp: number;
   readonly atk: number;
+  readonly def: number;
   readonly speed: number;
   readonly glyph: string;
   readonly color: string;
@@ -67,6 +75,7 @@ export const ENEMY_TYPES: Record<EnemyKind, EnemyStats> = Object.freeze({
   grunt: Object.freeze({
     hp: 10,
     atk: 2,
+    def: 0,
     speed: 4,
     glyph: 'g',
     color: 'green',
@@ -74,11 +83,19 @@ export const ENEMY_TYPES: Record<EnemyKind, EnemyStats> = Object.freeze({
   runner: Object.freeze({
     hp: 5,
     atk: 1,
+    def: 0,
     speed: 8,
     glyph: 'r',
     color: 'yellow',
   }),
-  brute: Object.freeze({ hp: 25, atk: 5, speed: 2, glyph: 'B', color: 'red' }),
+  brute: Object.freeze({
+    hp: 25,
+    atk: 5,
+    def: 0,
+    speed: 2,
+    glyph: 'B',
+    color: 'red',
+  }),
 });
 
 /**
@@ -93,6 +110,7 @@ export function createEnemy(kind: EnemyKind, pos: Vec2): Enemy {
     hp: stats.hp,
     maxHp: stats.hp,
     atk: stats.atk,
+    def: stats.def,
     speed: stats.speed,
     glyph: stats.glyph,
     color: stats.color,

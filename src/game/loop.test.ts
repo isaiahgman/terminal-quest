@@ -10,12 +10,14 @@ vi.mock('node:perf_hooks', () => ({
 
 import { runLoop, type LoopHooks } from './loop.js';
 import { SIM_DT } from './update.js';
-import type { GameState } from './state.js';
+import { createPlayer, type GameState } from './state.js';
 
 function makeState(): GameState {
   return {
     world: { width: 1, height: 1, tiles: [['floor']], seed: 0 },
-    player: { pos: { x: 0, y: 0 } },
+    player: createPlayer({ x: 0, y: 0 }),
+    enemies: [],
+    tooTired: false,
     tick: 0,
   };
 }
@@ -32,6 +34,7 @@ function recorder(stop = false): LoopHooks & {
 } {
   const rec = {
     drainIntents: (): [] => [],
+    rng: (): number => 0,
     render(state: GameState): void {
       this.lastTick = state.tick;
       this.renders += 1;

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { GameState, Tile } from '../game/state.js';
+import { createPlayer, type GameState, type Tile } from '../game/state.js';
+import { createEnemy } from '../game/enemy.js';
+import { createEnemyAi } from '../game/entities.js';
 
 /**
  * Fake ScreenBuffer standing in for terminal-kit's, exposing only the surface
@@ -35,7 +37,12 @@ function makeState(): GameState {
   ];
   return {
     world: { width: 3, height: 3, tiles, seed: 0 },
-    player: { pos: { x: 1, y: 1 } },
+    player: createPlayer({ x: 1, y: 1 }),
+    // An enemy on the floor so render() exercises the enemy-draw path too.
+    enemies: [
+      { enemy: createEnemy('grunt', { x: 1, y: 0 }), ai: createEnemyAi() },
+    ],
+    tooTired: false,
     tick: 0,
   };
 }
