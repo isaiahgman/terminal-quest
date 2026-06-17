@@ -12,7 +12,7 @@ Merged means: the game autosaves and, on relaunch, restores the player's locatio
 - [ ] **Autosave** on interval + key events (boss kill, weapon equip)
 - [ ] On launch: existing save → resume exactly (same world from seed, same position/stats); no save → new game
 - [ ] World reconstructs deterministically from the saved seed (relies on TQ-004 determinism)
-- [ ] Corrupt/missing save handled gracefully (start fresh, no crash); `pnpm typecheck` passes
+- [ ] Corrupt/missing save handled gracefully (start fresh, no crash); `npm run typecheck` passes
 
 ## Plan
 1. Define the serializable save shape; write/read JSON in `~/.terminal-quest/`.
