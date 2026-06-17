@@ -30,7 +30,7 @@ src/
     loop.ts              fixed-timestep loop (update + render)
     state.ts             GameState type + initialState
     update.ts            pure tick: move enemies, resolve attacks, stamina, pickups
-    entities.ts          Player/Pickup/Boss types + factories  (Enemy split out → enemy.ts; see §12)
+    entities.ts          enemy-AI stepper: stepEnemy / contactDamage / EnemyAi + charge constants (CHARGE_RADIUS, CHARGE_SPEED_MULTIPLIER); see §12
     enemy.ts             Enemy type + createEnemy factory + ENEMY_TYPES data table  (TQ-005; see §12)
     combat.ts            radius attack resolution, hit chance, damage, stamina  (PURE, tested)
     progression.ts       xp/level curve, stat growth                            (PURE, tested)
@@ -97,7 +97,7 @@ Deviations from the original §4/§5 design, recorded so the change — and its 
   - *Why:* it keeps the slice a single, cohesive, dependency-free file — it touches no shared files (`entities.ts`/`update.ts`), so spawning, AI, and rendering can land in separate PRs without contention. Co-locating the `Enemy` shape with the `ENEMY_TYPES` it stamps keeps the type and its data in one place rather than two files that must stay in sync.
   - *Layer bet intact:* `enemy.ts` lives in the sim layer and imports nothing from `render/`; `glyph`/`color` are plain strings the renderer maps, so the sim→render isolation in §2 still holds.
   - *§5 Enemy model updated to match:* added `kind` (archetype/AI discriminant), `maxHp` (HUD bars + heal clamping), and `glyph`/`color` (data-driven appearance — the renderer reads these off the entity rather than a `sprites.ts` per-kind switch). `aiState` is deferred to the AI slice (added then, not speculatively now).
-  - *Future entity types:* Player/Pickup/Boss may still follow the original `entities.ts` plan, and `weapons.ts`/`bosses.ts` data still live under `data/`. If a second consolidated entity module proves better, revisit then.
+  - *Future entity types:* the `entities.ts` name was repurposed for the enemy-AI stepper (`stepEnemy`/`contactDamage`/`EnemyAi` + charge constants), so it no longer holds the original Player/Pickup/Boss factories. `Player` already lives in `state.ts` (the `Player` interface, part of `GameState` — see §5), so its home is mostly decided. Only the `Pickup`/`Boss` factories remain unhomed — a small `factories.ts` (or co-location in `state.ts`) is the natural call. `weapons.ts`/`bosses.ts` data still live under `data/`.
 
 - **2026-06-16 (TQ-005) — charge is a speed *multiplier*, not a per-tick lunge.** The first cut of `entities.ts` implemented "switch to a direct charge" as a guaranteed one-tile step every tick while inside `CHARGE_RADIUS` (a movement *floor*). Review found that at 15 Hz **no** enemy kind banks a whole tile per tick (grunt 0.27, runner 0.53, brute 0.13), so the lunge fired every tick for every kind and clamped its cost to 0 — pinning all three to an identical 1 tile/tick (15 tiles/s) in charge range.
   - *Why it was wrong:* a floor *flattens* — it erased the speed stat exactly where the fight happens (a `speed: 2` brute charged as fast as a `speed: 8` runner, collapsing the `enemy.ts` balance triangle), and it re-coupled charge speed to the tick rate — the one thing the `speed * dt` move-budget exists to prevent (double the Hz and every charge doubles in speed).
