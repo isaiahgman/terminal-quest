@@ -4,6 +4,9 @@
  * class instances — so save/load is trivial later (TQ-012).
  */
 
+import type { Enemy } from './enemy.js';
+import type { Progression } from './progression.js';
+
 export interface Vec2 {
   x: number;
   y: number;
@@ -21,11 +24,24 @@ export interface World {
 
 export interface Player {
   pos: Vec2;
+  /**
+   * Leveling state and the stat ceilings it raises (TQ-009). Optional while the
+   * combat/loop integration rolls in incrementally: states that predate
+   * progression simply omit it, and {@link update} defaults a fresh level-1
+   * progression the first time XP is awarded.
+   */
+  progress?: Progression;
 }
 
 export interface GameState {
   world: World;
   player: Player;
+  /**
+   * Live enemies (TQ-005/006). Optional during incremental wiring — movement-only
+   * states omit it. The simulation removes any whose `hp` has reached 0 and
+   * converts them to player XP (TQ-009).
+   */
+  enemies?: readonly Enemy[];
   /** Monotonic simulation tick counter (set by the loop in TQ-002). */
   tick: number;
 }
