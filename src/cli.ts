@@ -77,27 +77,9 @@ async function main(): Promise<void> {
   term.fullscreen(true);
   term.hideCursor(true);
 
-  // A fresh world each launch; saving/restoring a chosen seed is TQ-012. The
-  // world is larger than the screen so the camera has to follow the player.
-  const worldSeed = Math.floor(Math.random() * 0x100000000);
-  const world = generateWorld(term.width * 2, term.height * 2, worldSeed);
-
-  // One RNG seeded off the world seed drives spawn placement; a second drives
-  // the live sim (attack rolls) so combat reproduces alongside the world.
-  const setupRng = new Rng(worldSeed);
-  const spawn = pickSpawn(world, setupRng);
-  const state: GameState = {
-    world,
-    player: createPlayer(spawn),
-    enemies: spawnEnemies(world, spawn, setupRng),
-    tooTired: false,
-    tick: 0,
-  };
-
-  const simRng = new Rng(worldSeed ^ 0x9e3779b9);
-  const renderer = new Renderer(term);
-  const input = new Input();
-
+  // Install crash/signal handlers before any setup runs: a throw from world
+  // generation, spawn placement, or the renderer/input constructors below must
+  // still restore the terminal via shutdown(), never leave it raw/alt-screen.
   process.on('SIGINT', () => shutdown(0));
   process.on('SIGTERM', () => shutdown(0));
   process.on('uncaughtException', (err: unknown) => {
@@ -120,6 +102,27 @@ async function main(): Promise<void> {
   process.on('exit', () => {
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
   });
+
+  // A fresh world each launch; saving/restoring a chosen seed is TQ-012. The
+  // world is larger than the screen so the camera has to follow the player.
+  const worldSeed = Math.floor(Math.random() * 0x100000000);
+  const world = generateWorld(term.width * 2, term.height * 2, worldSeed);
+
+  // One RNG seeded off the world seed drives spawn placement; a second drives
+  // the live sim (attack rolls) so combat reproduces alongside the world.
+  const setupRng = new Rng(worldSeed);
+  const spawn = pickSpawn(world, setupRng);
+  const state: GameState = {
+    world,
+    player: createPlayer(spawn),
+    enemies: spawnEnemies(world, spawn, setupRng),
+    tooTired: false,
+    tick: 0,
+  };
+
+  const simRng = new Rng(worldSeed ^ 0x9e3779b9);
+  const renderer = new Renderer(term);
+  const input = new Input();
 
   // Negotiate the kitty keyboard protocol (real key-release → no coast) and
   // start feeding input. Falls back to the timeout model on terminals without
