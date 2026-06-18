@@ -2,6 +2,7 @@ import terminalKit from 'terminal-kit';
 import { type GameState, tileAt } from '../game/state.js';
 import { computeCamera } from '../game/world/camera.js';
 import { cellAttr, glyphForTile, PLAYER_GLYPH } from './sprites.js';
+import { HUD_ROWS, drawHud } from './hud.js';
 
 type Term = typeof terminalKit.terminal;
 
@@ -35,10 +36,14 @@ export class Renderer {
 
   render(state: GameState): void {
     const { width, height } = this.screen;
+    // Reserve the bottom `HUD_ROWS` for the HUD and pan the world inside the
+    // rows above it, so the two regions never overlap (TQ-008 acceptance). The
+    // camera, tile pass, and entity culling all use this reduced play height.
+    const playH = Math.max(0, height - HUD_ROWS);
     const cam = computeCamera(
       state.player.pos,
       width,
-      height,
+      playH,
       state.world.width,
       state.world.height,
     );
@@ -57,7 +62,7 @@ export class Renderer {
       dx: 1,
       dy: 0,
     };
-    for (let sy = 0; sy < height; sy++) {
+    for (let sy = 0; sy < playH; sy++) {
       for (let sx = 0; sx < width; sx++) {
         const g = glyphForTile(tileAt(state.world, cam.x + sx, cam.y + sy));
         cellOpts.x = sx;
@@ -75,7 +80,7 @@ export class Renderer {
     for (const { enemy } of state.enemies ?? []) {
       const ex = enemy.pos.x - cam.x;
       const ey = enemy.pos.y - cam.y;
-      if (ex < 0 || ey < 0 || ex >= width || ey >= height) continue;
+      if (ex < 0 || ey < 0 || ex >= width || ey >= playH) continue;
       this.screen.put(
         {
           x: ex,
@@ -100,6 +105,9 @@ export class Renderer {
       },
       PLAYER_GLYPH.char,
     );
+
+    // The HUD owns the reserved band below the world viewport.
+    drawHud(this.screen, state, playH, width);
 
     process.stdout.write(SYNC_ON);
     this.screen.draw({ delta: true });

@@ -49,7 +49,9 @@ class FakeScreenBuffer {
 
 vi.mock('terminal-kit', () => ({
   default: {
-    terminal: { width: 8, height: 4 },
+    // Tall enough that the world viewport survives the reserved HUD band
+    // (HUD_ROWS) and still pans inside a larger world.
+    terminal: { width: 8, height: 8 },
     ScreenBuffer: FakeScreenBuffer,
   },
 }));
@@ -147,21 +149,25 @@ describe('Renderer', () => {
     const { Renderer } = await import('./renderer.js');
     const { glyphForTile, cellAttr } = await import('./sprites.js');
     const { computeCamera } = await import('../game/world/camera.js');
+    const { HUD_ROWS } = await import('./hud.js');
 
     const state = makeBigState();
     const renderer = new Renderer();
     renderer.render(state);
 
+    // The world viewport is the screen height minus the reserved HUD band.
+    const playH = 8 - HUD_ROWS;
+
     // The camera clamps to neither edge here, so the offset is non-zero —
     // proving the viewport actually pans into a larger world.
-    const cam = computeCamera(state.player.pos, 8, 4, 20, 20);
+    const cam = computeCamera(state.player.pos, 8, playH, 20, 20);
     expect([cam.x, cam.y]).toEqual([6, 8]);
 
-    // The first 8*4 puts are the tile pass, row-major over the viewport. Each
-    // must carry the glyph + colour of the world tile under the camera. A
+    // The first 8*playH puts are the tile pass, row-major over the viewport.
+    // Each must carry the glyph + colour of the world tile under the camera. A
     // swapped char/colour, or an off-by-one in the camera offset, mismatches.
-    const tilePuts = recordedPuts(renderer).slice(0, 8 * 4);
-    for (let sy = 0; sy < 4; sy++) {
+    const tilePuts = recordedPuts(renderer).slice(0, 8 * playH);
+    for (let sy = 0; sy < playH; sy++) {
       for (let sx = 0; sx < 8; sx++) {
         const worldX = cam.x + sx;
         const worldY = cam.y + sy;
@@ -187,25 +193,36 @@ describe('Renderer', () => {
     expect(glyphForTile('floor').color).toBe('gray');
   });
 
-  it('overdraws the player (and enemies) on top of their tiles', async () => {
+  it('overdraws the player (and enemies) on their tiles, with the HUD below', async () => {
     const { Renderer } = await import('./renderer.js');
     const { PLAYER_GLYPH, cellAttr } = await import('./sprites.js');
     const { computeCamera } = await import('../game/world/camera.js');
+    const { HUD_ROWS } = await import('./hud.js');
 
     const state = makeBigState();
     const renderer = new Renderer();
     renderer.render(state);
 
     const puts = recordedPuts(renderer);
-    const cam = computeCamera(state.player.pos, 8, 4, 20, 20);
+    const playH = 8 - HUD_ROWS;
+    const cam = computeCamera(state.player.pos, 8, playH, 20, 20);
+
+    // The world (tiles, enemies, player) draws strictly above the HUD band, and
+    // the HUD strictly within it — the two regions never overlap (acceptance:
+    // "overlays without corrupting the world viewport").
+    const worldPuts = puts.filter((p) => p.y < playH);
+    const hudPuts = puts.filter((p) => p.y >= playH);
+    expect(hudPuts.length).toBeGreaterThan(0);
+    expect(hudPuts.every((p) => p.y < 8)).toBe(true);
 
     const playerScreenX = state.player.pos.x - cam.x;
     const playerScreenY = state.player.pos.y - cam.y;
     const playerAttr = cellAttr(PLAYER_GLYPH, true);
 
-    // The player is drawn last, so it sits on top of the tile already drawn at
-    // its cell — the overdraw the renderer relies on.
-    expect(puts[puts.length - 1]).toEqual({
+    // The player is the last world draw, so it sits on top of the tile already
+    // drawn at its cell — the overdraw the renderer relies on. (HUD puts follow,
+    // but they live in the reserved band, never over the player.)
+    expect(worldPuts[worldPuts.length - 1]).toEqual({
       x: playerScreenX,
       y: playerScreenY,
       char: PLAYER_GLYPH.char,
@@ -244,5 +261,10 @@ describe('Renderer', () => {
       bold: false,
       bgColor: enemyAttr.bgColor,
     });
+
+    // The HUD band begins at row `playH` with the health label — confirming the
+    // renderer composes the HUD into the reserved region.
+    const hudTop = hudPuts.filter((p) => p.y === playH);
+    expect(hudTop[0]).toMatchObject({ x: 0, y: playH, char: 'HP ' });
   });
 });
