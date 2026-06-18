@@ -1,5 +1,5 @@
 # TQ-003 — Player movement + following camera
-Status: merged · Depends on: TQ-002 · Scope: ~M · Touches: src/input/input.ts, src/game/update.ts, src/game/world/camera.ts, src/render/renderer.ts
+Depends on: TQ-002 · Scope: ~M · Touches: src/input/input.ts, src/game/update.ts, src/game/world/camera.ts, src/render/renderer.ts
 
 ## Context
 First interactivity + the camera that makes a world bigger than the screen feel open ([prd F1](../prd.md#10-features), [tdd §7](../tdd.md#7-world-gen--camera)).

@@ -1,5 +1,5 @@
 # TQ-012 — Save / autosave
-Status: ready · Depends on: TQ-004, TQ-009 · Scope: ~M · Touches: src/save/save.ts, src/cli.ts, src/game/loop.ts
+Depends on: TQ-004, TQ-009 · Scope: ~M · Touches: src/save/save.ts, src/cli.ts, src/game/loop.ts
 
 ## Context
 Persistence ([prd §8](../prd.md#8-save), [tdd §9](../tdd.md#9-save)): drop the player back exactly where they were, and make progression *persistent* (roguelite).

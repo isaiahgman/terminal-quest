@@ -1,5 +1,5 @@
 # TQ-007 — Named attack types (risk/reward) wired to input
-Status: ready · Depends on: TQ-006 · Scope: ~S · Touches: src/data/attacks.ts, src/input/input.ts, src/game/update.ts
+Depends on: TQ-006 · Scope: ~S · Touches: src/data/attacks.ts, src/input/input.ts, src/game/update.ts
 
 ## Context
 Turns the engine into *play* ([prd §6](../prd.md#6-combat--the-signature-system)): 1–3 creatively-named attacks on a risk/reward axis, mash-but-stamina-limited.

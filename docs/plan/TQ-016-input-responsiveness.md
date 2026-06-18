@@ -1,5 +1,5 @@
 # TQ-016 — Responsive held-direction movement (decouple from OS key-repeat)
-Status: in progress (#32) · Depends on: TQ-003 · Scope: ~S · Touches: src/input/input.ts (+ src/input/input.test.ts), maybe src/game/config.ts
+Depends on: TQ-003 · Scope: ~S · Touches: src/input/input.ts (+ src/input/input.test.ts), maybe src/game/config.ts
 
 ## Context
 Beta-test feedback (2026-06-15): holding a direction works, but movement **fires once, stalls for ~½–1 s, then starts repeating**. Root cause is the input model in [`src/input/input.ts`](../../src/input/input.ts): it's "repeat on press" and leans on the **OS keyboard auto-repeat** stream to keep moving. Terminals emit key-DOWN only (no key-up — [tdd input gotcha](../tdd.md)), and the OS inserts a long *initial-repeat delay* before auto-repeat kicks in. That gap is the stall: first press → one move → silence until the OS starts repeating → continuous. The movement cadence is also hostage to each user's OS keyboard settings instead of the game's 15 fps tick.

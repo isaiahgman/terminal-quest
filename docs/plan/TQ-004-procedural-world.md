@@ -1,5 +1,5 @@
 # TQ-004 — Procedural world gen + collision
-Status: in progress (sliced — see Slicing) · Depends on: TQ-003 · Scope: ~M · Touches: src/game/world/generate.ts, src/game/rng.ts, src/game/update.ts, src/cli.ts
+Depends on: TQ-003 · Scope: ~M · Touches: src/game/world/generate.ts, src/game/rng.ts, src/game/update.ts, src/cli.ts
 
 ## Context
 The open-feeling world ([prd §7](../prd.md#7-world--progression), [tdd §7](../tdd.md#7-world-gen--camera)) via rot.js. Accepted that hand-authoring a big world is the bottleneck → procedural.

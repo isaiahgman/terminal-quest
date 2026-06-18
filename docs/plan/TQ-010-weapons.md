@@ -1,5 +1,5 @@
 # TQ-010 — Weapons: slot, random drops, equip, damage
-Status: ready · Depends on: TQ-006, TQ-009 · Scope: ~M · Touches: src/data/weapons.ts, src/game/entities.ts, src/game/update.ts, src/render/hud.ts
+Depends on: TQ-006, TQ-009 · Scope: ~M · Touches: src/data/weapons.ts, src/game/entities.ts, src/game/update.ts, src/render/hud.ts
 
 ## Context
 The second progression axis ([prd §7](../prd.md#7-world--progression)): a single weapon slot, weapons found randomly in the world, equipping boosts damage.

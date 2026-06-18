@@ -1,5 +1,5 @@
 # TQ-017 — Diagonal (8-direction) movement
-Status: ready · Depends on: TQ-016 · Scope: ~S · Touches: src/input/input.ts (+ src/input/input.test.ts)
+Depends on: TQ-016 · Scope: ~S · Touches: src/input/input.ts (+ src/input/input.test.ts)
 
 ## Context
 Beta-test feedback (2026-06-15): two directions held together should move **diagonally**. Today input maps each key to a single orthogonal step and never combines them, so the `@` only goes in 4 directions. [TQ-003's note](TQ-003-movement-camera.md) already flagged this ("Decide diagonal movement now — 8-dir feels better for a swarm dodger"); this ticket is that decision, made: **yes, 8-direction.** It's the natural follow-on to [TQ-016](TQ-016-input-responsiveness.md), whose held-direction state lets us see which directions are held *at the same time*.
