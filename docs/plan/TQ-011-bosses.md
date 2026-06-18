@@ -1,5 +1,5 @@
 # TQ-011 — Bosses + win condition
-Status: ready · Depends on: TQ-007, TQ-009 · Scope: ~M · Touches: src/data/bosses.ts, src/game/entities.ts, src/game/update.ts
+Depends on: TQ-007, TQ-009 · Scope: ~M · Touches: src/data/bosses.ts, src/game/entities.ts, src/game/update.ts
 
 ## Context
 The goal of the game ([prd §7](../prd.md#7-world--progression)): 10 bosses scattered across the world; hard to reach, hard to beat; all 10 down = win.

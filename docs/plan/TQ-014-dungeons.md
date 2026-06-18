@@ -1,5 +1,5 @@
 # TQ-014 — High-risk/high-reward dungeons
-Status: ready · Depends on: TQ-011 · Scope: ~M · Touches: src/game/world/generate.ts, src/game/update.ts, src/data/enemies.ts
+Depends on: TQ-011 · Scope: ~M · Touches: src/game/world/generate.ts, src/game/update.ts, src/data/enemies.ts
 
 ## Context
 Depth in the world ([prd §7](../prd.md#7-world--progression)): optional pockets with denser danger and better loot — the risk/reward choice that makes exploring meaningful.
