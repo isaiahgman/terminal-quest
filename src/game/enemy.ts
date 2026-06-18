@@ -15,8 +15,19 @@
 
 import type { Vec2 } from './state.js';
 
-/** Discriminant tag identifying both the enemy archetype and its AI profile. */
-export type EnemyKind = 'grunt' | 'runner' | 'brute';
+/** The swarm archetypes — the kinds the {@link ENEMY_TYPES} table stamps. */
+export type SwarmKind = 'grunt' | 'runner' | 'brute';
+
+/**
+ * Discriminant tag for anything in the enemy pipeline: a {@link SwarmKind} swarm
+ * enemy, or a `'boss'` — a tough, identity-bearing enemy authored in
+ * `data/bosses.ts` and built by `createBoss` (never stamped from the swarm table
+ * below). Movement, combat, contact damage, and rendering all treat a boss as an
+ * ordinary `Enemy`; only its defeat-counting and signature behaviour are special
+ * (TQ-011). Splitting the union keeps the swarm table exhaustive over only the
+ * kinds it actually defines.
+ */
+export type EnemyKind = SwarmKind | 'boss';
 
 /** A live enemy in the world. Plain, serializable data (no methods). */
 export interface Enemy {
@@ -71,7 +82,7 @@ interface EnemyStats {
  * against player stats lands once enemies are wired into update() (TQ-005 core)
  * and combat exists (TQ-006).
  */
-export const ENEMY_TYPES: Record<EnemyKind, EnemyStats> = Object.freeze({
+export const ENEMY_TYPES: Record<SwarmKind, EnemyStats> = Object.freeze({
   grunt: Object.freeze({
     hp: 10,
     atk: 2,
@@ -102,7 +113,7 @@ export const ENEMY_TYPES: Record<EnemyKind, EnemyStats> = Object.freeze({
  * Build a fresh enemy of `kind` at `pos`. `hp` starts at `maxHp`. The position
  * is copied so the caller's `Vec2` is never aliased into the enemy.
  */
-export function createEnemy(kind: EnemyKind, pos: Vec2): Enemy {
+export function createEnemy(kind: SwarmKind, pos: Vec2): Enemy {
   const stats = ENEMY_TYPES[kind];
   return {
     kind,

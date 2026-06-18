@@ -7,7 +7,7 @@ import {
   createPlayer,
   isWalkable,
 } from './game/state.js';
-import { type EnemyKind, createEnemy } from './game/enemy.js';
+import { type SwarmKind, createEnemy } from './game/enemy.js';
 import { createEnemyAi } from './game/entities.js';
 import { generateWorld } from './game/world/generate.js';
 import { Rng } from './game/rng.js';
@@ -24,7 +24,7 @@ const term = terminalKit.terminal;
 
 /** How many enemies to seed the world with, and the mix of kinds to draw from. */
 const ENEMY_COUNT = 8;
-const ENEMY_KINDS: readonly EnemyKind[] = ['grunt', 'runner', 'brute'];
+const ENEMY_KINDS: readonly SwarmKind[] = ['grunt', 'runner', 'brute'];
 
 /**
  * Scatter a handful of enemies on walkable ground, away from the player's spawn

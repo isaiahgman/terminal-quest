@@ -16,6 +16,13 @@ export interface Vec2 {
 
 export type Tile = 'floor' | 'wall';
 
+/**
+ * Run status: `'playing'` normally, `'victory'` once every placed boss is
+ * defeated (TQ-011). The visible win screen + loop halt land in a later TQ-011
+ * PR; this flag is the sim-side trigger they react to.
+ */
+export type GameStatus = 'playing' | 'victory';
+
 export interface World {
   readonly width: number;
   readonly height: number;
@@ -68,6 +75,19 @@ export interface GameState {
    * it makes the stamina gate observable and testable.
    */
   tooTired: boolean;
+  /**
+   * Bosses defeated so far and the total placed in the world (TQ-011). The HUD
+   * (TQ-008) renders these as `n/total`; victory fires when they are equal.
+   * Both optional during incremental wiring — a state with no bosses omits them
+   * and {@link update} treats them as 0, so no bosses ⇒ no victory.
+   */
+  bossesDefeated?: number;
+  bossesTotal?: number;
+  /**
+   * Run status (TQ-011). Optional/defaulted to `'playing'` like the counters
+   * above; flips to `'victory'` once every placed boss is defeated.
+   */
+  status?: GameStatus;
   /** Monotonic simulation tick counter (set by the loop in TQ-002). */
   tick: number;
 }
