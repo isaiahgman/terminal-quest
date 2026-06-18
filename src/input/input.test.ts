@@ -106,26 +106,92 @@ describe('Input — timeout tier (no release events)', () => {
     expect(input.drain()).toEqual([]);
   });
 
-  it('re-pressing an already-held direction re-seats it as last (last pressed wins)', () => {
+  it('opposing directions on one axis resolve to the last pressed — no cancel, no stall', () => {
     const { input, press, advance } = makeInput();
 
     press('UP');
     advance(SIM_DT);
     expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: -1 }]);
 
-    press('DOWN'); // newer than UP → DOWN is last
+    press('DOWN'); // newer than the still-held UP → DOWN wins the vertical axis
     advance(SIM_DT);
-    expect(input.drain()).toEqual([
-      { type: 'move', dx: 0, dy: -1 },
-      { type: 'move', dx: 0, dy: 1 },
-    ]);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: 1 }]);
 
-    press('UP'); // re-press: UP must jump back to last so update() applies it
+    press('UP'); // re-press makes UP newest again → UP wins (a quick reversal)
     advance(SIM_DT);
-    expect(input.drain()).toEqual([
-      { type: 'move', dx: 0, dy: 1 },
-      { type: 'move', dx: 0, dy: -1 },
-    ]);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: -1 }]);
+  });
+
+  it('combines a horizontal and a vertical hold into one diagonal intent per tick', () => {
+    const { input, press, advance } = makeInput();
+
+    press('UP');
+    press('RIGHT');
+    advance(SIM_DT);
+    // A single intent with both dx and dy set — not two separate orthogonal steps.
+    expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: -1 }]);
+  });
+
+  it('reaches all four diagonals from a horizontal + vertical hold', () => {
+    const cases: Array<[string, string, number, number]> = [
+      ['UP', 'RIGHT', 1, -1],
+      ['UP', 'LEFT', -1, -1],
+      ['DOWN', 'RIGHT', 1, 1],
+      ['DOWN', 'LEFT', -1, 1],
+    ];
+    for (const [vertical, horizontal, dx, dy] of cases) {
+      const { input, press } = makeInput();
+      press(vertical);
+      press(horizontal);
+      expect(input.drain()).toEqual([{ type: 'move', dx, dy }]);
+    }
+  });
+
+  it('resolves the contested axis by recency while the free axis still moves', () => {
+    const { input, press, advance } = makeInput();
+
+    press('LEFT');
+    advance(SIM_DT);
+    press('RIGHT'); // contests the horizontal axis; RIGHT is newer → +x
+    press('DOWN'); // vertical axis is uncontested
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: 1 }]);
+  });
+
+  it('breaks an exact-timestamp tie toward the positive direction', () => {
+    // Same-tick presses (no clock advance between them) tie on lastSeen; the
+    // resolver must still pick deterministically — the positive axis wins
+    // (+x for left/right, +y for up/down). Pins the `>=` tiebreak: a strict `>`
+    // would flip these to the negative direction.
+    {
+      const { input, press } = makeInput();
+      press('RIGHT');
+      press('LEFT'); // ties the horizontal axis
+      expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: 0 }]);
+    }
+    {
+      const { input, press } = makeInput();
+      press('DOWN');
+      press('UP'); // ties the vertical axis
+      expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: 1 }]);
+    }
+  });
+
+  it('expires one axis of a held diagonal independently', () => {
+    const { input, press, repeat, advance } = makeInput();
+
+    press('UP');
+    press('RIGHT'); // both held from t=0 → diagonal
+    advance(200);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: -1 }]);
+
+    // RIGHT keeps auto-repeating; UP gets no further event. Past UP's window
+    // (measured from its only event at t=0) the vertical axis expires, while the
+    // fresh RIGHT repeat keeps the horizontal alive → the diagonal decays to a
+    // single horizontal step rather than sticking or stopping.
+    repeat('RIGHT'); // RIGHT refreshed at t=200
+    advance(HELD_WINDOW_MS - 50); // t=450: UP 450ms stale (gone), RIGHT 250ms (held)
+    expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: 0 }]);
   });
 });
 
