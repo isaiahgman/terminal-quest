@@ -106,26 +106,56 @@ describe('Input — timeout tier (no release events)', () => {
     expect(input.drain()).toEqual([]);
   });
 
-  it('re-pressing an already-held direction re-seats it as last (last pressed wins)', () => {
+  it('opposing directions on one axis resolve to the last pressed — no cancel, no stall', () => {
     const { input, press, advance } = makeInput();
 
     press('UP');
     advance(SIM_DT);
     expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: -1 }]);
 
-    press('DOWN'); // newer than UP → DOWN is last
+    press('DOWN'); // newer than the still-held UP → DOWN wins the vertical axis
     advance(SIM_DT);
-    expect(input.drain()).toEqual([
-      { type: 'move', dx: 0, dy: -1 },
-      { type: 'move', dx: 0, dy: 1 },
-    ]);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: 1 }]);
 
-    press('UP'); // re-press: UP must jump back to last so update() applies it
+    press('UP'); // re-press makes UP newest again → UP wins (a quick reversal)
     advance(SIM_DT);
-    expect(input.drain()).toEqual([
-      { type: 'move', dx: 0, dy: 1 },
-      { type: 'move', dx: 0, dy: -1 },
-    ]);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: -1 }]);
+  });
+
+  it('combines a horizontal and a vertical hold into one diagonal intent per tick', () => {
+    const { input, press, advance } = makeInput();
+
+    press('UP');
+    press('RIGHT');
+    advance(SIM_DT);
+    // A single intent with both dx and dy set — not two separate orthogonal steps.
+    expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: -1 }]);
+  });
+
+  it('reaches all four diagonals from a horizontal + vertical hold', () => {
+    const cases: Array<[string, string, number, number]> = [
+      ['UP', 'RIGHT', 1, -1],
+      ['UP', 'LEFT', -1, -1],
+      ['DOWN', 'RIGHT', 1, 1],
+      ['DOWN', 'LEFT', -1, 1],
+    ];
+    for (const [vertical, horizontal, dx, dy] of cases) {
+      const { input, press } = makeInput();
+      press(vertical);
+      press(horizontal);
+      expect(input.drain()).toEqual([{ type: 'move', dx, dy }]);
+    }
+  });
+
+  it('resolves the contested axis by recency while the free axis still moves', () => {
+    const { input, press, advance } = makeInput();
+
+    press('LEFT');
+    advance(SIM_DT);
+    press('RIGHT'); // contests the horizontal axis; RIGHT is newer → +x
+    press('DOWN'); // vertical axis is uncontested
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: 1 }]);
   });
 });
 
