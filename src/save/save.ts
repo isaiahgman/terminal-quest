@@ -14,8 +14,14 @@
  * return `null` on anything malformed, so a corrupt or missing save degrades to
  * a fresh game instead of crashing.
  */
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { mkdir, rename, writeFile } from 'node:fs/promises';
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { type GameState, type Player, type Vec2 } from '../game/state.js';
@@ -83,16 +89,14 @@ export function playerFromSave(save: SaveData): Player {
 
 // --- Validation ---------------------------------------------------------------
 // A save is attacker-controlled-ish (a hand-edited or truncated file), so every
-// field is checked before use. Non-finite numbers are rejected so they can never
-// reach the sim; world dims/seed are integer-checked because `generateWorld`
-// throws on non-integers — a check here turns that crash into a clean new game.
+// field is checked before use — and not just for *type* but for *domain*: a
+// value that is the right type yet out of range (a fractional level, negative
+// hp, an absurd stat) is rejected too, so the sim only ever loads numbers it was
+// designed for. World dims/seed are integer-checked because `generateWorld`
+// throws on non-integers; a check here turns that crash into a clean new game.
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function isInteger(value: unknown): value is number {
@@ -103,18 +107,32 @@ function isPositiveInteger(value: unknown): value is number {
   return isInteger(value) && value > 0;
 }
 
+function isNonNegativeInteger(value: unknown): value is number {
+  return isInteger(value) && value >= 0;
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
 function isVec2(value: unknown): value is Vec2 {
   return isRecord(value) && isInteger(value.x) && isInteger(value.y);
 }
 
 function isProgression(value: unknown): value is Progression {
+  // level is a positive integer (the curve is geometric in an integer level);
+  // xp is non-negative; the stat ceilings are strictly positive.
   return (
     isRecord(value) &&
-    isFiniteNumber(value.level) &&
-    isFiniteNumber(value.xp) &&
-    isFiniteNumber(value.maxHp) &&
-    isFiniteNumber(value.maxStamina) &&
-    isFiniteNumber(value.atk)
+    isPositiveInteger(value.level) &&
+    isNonNegativeNumber(value.xp) &&
+    isPositiveNumber(value.maxHp) &&
+    isPositiveNumber(value.maxStamina) &&
+    isPositiveNumber(value.atk)
   );
 }
 
@@ -135,15 +153,15 @@ function isSaveData(value: unknown): value is SaveData {
   if (
     !isRecord(player) ||
     !isVec2(player.pos) ||
-    !isFiniteNumber(player.hp) ||
-    !isFiniteNumber(player.stamina) ||
-    !isFiniteNumber(player.def) ||
+    !isNonNegativeNumber(player.hp) ||
+    !isNonNegativeNumber(player.stamina) ||
+    !isNonNegativeNumber(player.def) ||
     !isProgression(player.progress)
   ) {
     return false;
   }
 
-  return isFiniteNumber(value.tick);
+  return isNonNegativeInteger(value.tick);
 }
 
 /** Parse + validate save JSON. Returns `null` for malformed or wrong-version data. */
@@ -169,14 +187,21 @@ export function saveFilePath(): string {
   return join(saveDir(), 'save.json');
 }
 
-// Monotonic counter giving every write a unique temp filename, so an async
-// interval write and the final sync write on quit can never collide on the same
-// temp path. Each write still ends in an atomic rename, so the last rename wins.
+// Monotonic counter giving every write a unique temp filename, so concurrent
+// writes (an interval autosave and the final sync flush on quit) never collide
+// on the same temp path. Each write ends in an atomic rename, so a reader never
+// sees a partial file; *ordering* between concurrent writers is the caller's job
+// (cli.ts serializes its async autosaves).
 let writeCounter = 0;
 
 function tempPath(file: string): string {
   writeCounter += 1;
   return `${file}.${writeCounter}.tmp`;
+}
+
+/** The exact bytes written to disk. One definition so the format can't drift. */
+function serializeJson(state: GameState): string {
+  return JSON.stringify(serialize(state), null, 2);
 }
 
 /**
@@ -202,8 +227,14 @@ export async function writeSave(state: GameState): Promise<void> {
   const file = saveFilePath();
   const tmp = tempPath(file);
   await mkdir(saveDir(), { recursive: true });
-  await writeFile(tmp, JSON.stringify(serialize(state), null, 2), 'utf8');
-  await rename(tmp, file);
+  try {
+    await writeFile(tmp, serializeJson(state), 'utf8');
+    await rename(tmp, file);
+  } finally {
+    // On success `rename` already consumed `tmp`; on failure (read-only $HOME,
+    // full disk, EXDEV) remove the orphan so repeated autosaves don't pile up.
+    await rm(tmp, { force: true });
+  }
 }
 
 /**
@@ -215,6 +246,10 @@ export function writeSaveSync(state: GameState): void {
   const file = saveFilePath();
   const tmp = tempPath(file);
   mkdirSync(saveDir(), { recursive: true });
-  writeFileSync(tmp, JSON.stringify(serialize(state), null, 2), 'utf8');
-  renameSync(tmp, file);
+  try {
+    writeFileSync(tmp, serializeJson(state), 'utf8');
+    renameSync(tmp, file);
+  } finally {
+    rmSync(tmp, { force: true }); // remove the orphan if write/rename threw
+  }
 }

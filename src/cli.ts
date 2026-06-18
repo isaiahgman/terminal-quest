@@ -62,6 +62,11 @@ function spawnEnemies(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
   return enemies;
 }
 
+/** The player's level, defaulting to 1 for pre-progression states. */
+function currentLevel(state: GameState): number {
+  return state.player.progress?.level ?? 1;
+}
+
 /**
  * Restore the terminal to a clean state. Must run on EVERY exit path
  * (quit, SIGINT/SIGTERM, uncaught error) — a roguelike that leaves the
@@ -145,9 +150,19 @@ async function main(): Promise<void> {
   // One RNG seeded off the world seed drives spawn placement; a second drives
   // the live sim (attack rolls) so combat reproduces alongside the world.
   const setupRng = new Rng(worldSeed);
-  const player: Player = save
-    ? playerFromSave(save)
-    : createPlayer(pickSpawn(world, setupRng));
+  let player: Player;
+  if (save) {
+    const restored = playerFromSave(save);
+    // A hand-edited or stale save can carry a pos that isn't walkable in the
+    // rebuilt world (out of bounds, or inside a wall) — which would soft-lock
+    // the player with no escape. Keep the restored stats but relocate to a valid
+    // spawn in that case; the validator can't catch this (it can't see the world).
+    player = isWalkable(world, restored.pos.x, restored.pos.y)
+      ? restored
+      : { ...restored, pos: pickSpawn(world, setupRng) };
+  } else {
+    player = createPlayer(pickSpawn(world, setupRng));
+  }
   const state: GameState = {
     world,
     player,
@@ -165,16 +180,34 @@ async function main(): Promise<void> {
   // protocol support. Must finish before the loop so input is live frame one.
   keyboard = await startKeyboard(input);
 
-  // Autosave: fire-and-forget async writes that never block the loop on disk I/O.
-  // A failed autosave is logged but non-fatal — the final sync save on exit and
-  // the next interval both get another chance.
+  // Autosave: never blocks the loop on disk I/O. Writes are coalesced through a
+  // single in-flight chain so two can't race to rename (Node's threadpool doesn't
+  // preserve start order) — whatever `latestState` is when a slot frees up lands
+  // last. A failed write is logged, non-fatal: the next interval/level-up/exit
+  // flush retries.
   latestState = state;
-  let lastSavedLevel = state.player.progress?.level ?? 1;
-  const requestSave = (): void => {
-    if (latestState === undefined) return;
-    void writeSave(latestState).catch((err: unknown) => {
+  let lastSavedLevel = currentLevel(state);
+  let saving = false;
+  let pending = false;
+  const flushSave = async (): Promise<void> => {
+    if (saving) {
+      pending = true; // collapse a burst into one more write after this one
+      return;
+    }
+    saving = true;
+    try {
+      do {
+        pending = false;
+        if (latestState !== undefined) await writeSave(latestState);
+      } while (pending);
+    } catch (err: unknown) {
       console.error('terminal-quest: autosave failed', err);
-    });
+    } finally {
+      saving = false;
+    }
+  };
+  const requestSave = (): void => {
+    void flushSave();
   };
   autosaveTimer = setInterval(requestSave, AUTOSAVE_INTERVAL_MS);
   autosaveTimer.unref(); // never keep the process alive for an autosave
@@ -186,7 +219,7 @@ async function main(): Promise<void> {
       latestState = s;
       // Save immediately on a level-up — the one "key event" that exists today
       // (boss-kill / weapon-equip triggers arrive with TQ-011 / TQ-010).
-      const level = s.player.progress?.level ?? 1;
+      const level = currentLevel(s);
       if (level > lastSavedLevel) {
         lastSavedLevel = level;
         requestSave();
