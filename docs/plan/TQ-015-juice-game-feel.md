@@ -12,7 +12,7 @@ Merged means: hits produce visible, satisfying feedback — flashes, floating da
 - [ ] **Floating damage numbers** rise and fade at hit locations
 - [ ] A short **screen shake** on high-damage / high-risk hits
 - [ ] All effects are render-only (driven by transient events from state); no change to game rules or tests
-- [ ] No frame-rate regression / flicker; `pnpm typecheck` passes
+- [ ] No frame-rate regression / flicker; `npm run typecheck` passes
 
 ## Plan
 1. Emit transient "hit events" from the sim (data the renderer reads).

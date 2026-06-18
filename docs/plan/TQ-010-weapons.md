@@ -12,7 +12,7 @@ Merged means: weapons drop in the world; walking over one picks it up; it equips
 - [ ] Weapons spawn as pickups in the world (seeded placement)
 - [ ] Walking onto a weapon equips it to the **single slot** (replacing the previous); damage reflects it
 - [ ] Equipped weapon shown in the HUD
-- [ ] Damage change verified (engine uses weapon modifier); `pnpm typecheck` + `pnpm test` pass
+- [ ] Damage change verified (engine uses weapon modifier); `npm run typecheck` + `npm run test` pass
 
 ## Plan
 1. Author weapon data; add `Pickup{kind:'weapon'}` + seeded spawns.
