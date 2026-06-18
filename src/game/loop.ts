@@ -40,18 +40,20 @@ export function runLoop(initial: GameState, hooks: LoopHooks): void {
     last = now;
 
     let advanced = false;
-    if (acc >= SIM_DT) {
-      // Drain once per frame, not per sub-step: a multi-step catch-up frame must
-      // apply the same buffered intents to every step. Draining inside the loop
-      // would feed the intents to the first step and an empty list to the rest.
-      // Guarded by `acc >= SIM_DT` so a sub-step frame (no step runs) never
-      // drains and silently discards intents that arrived too early.
+    // Drain once per simulation step, not once per frame: each fixed step is a
+    // discrete tick of simulated time and must consume its own intents. The
+    // input layer's `drain()` re-emits each still-held direction every call (so a
+    // held move advances one tile per step, staying in lockstep with the enemies
+    // that also step here), while a one-shot intent (a single attack/tap) is
+    // returned by exactly one drain and never replayed — so a multi-step catch-up
+    // frame can't turn one keypress into several swings. A sub-step frame
+    // (`acc < SIM_DT`) runs the loop zero times, so it never drains; held intents
+    // simply persist to the next frame, and one-shots are still buffered.
+    while (acc >= SIM_DT) {
       const intents = hooks.drainIntents();
-      while (acc >= SIM_DT) {
-        state = update(state, intents, SIM_DT_SECONDS, hooks.rng);
-        acc -= SIM_DT;
-        advanced = true;
-      }
+      state = update(state, intents, SIM_DT_SECONDS, hooks.rng);
+      acc -= SIM_DT;
+      advanced = true;
     }
 
     if (advanced) hooks.render(state);
