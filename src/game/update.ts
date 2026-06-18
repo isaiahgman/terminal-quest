@@ -81,11 +81,22 @@ export function update(
 
   let { x, y } = state.player.pos;
   if (lastMove !== undefined) {
-    const nx = x + lastMove.dx;
-    const ny = y + lastMove.dy;
-    if (isWalkable(state.world, nx, ny)) {
-      x = nx;
-      y = ny;
+    const { dx, dy } = lastMove;
+    if (isWalkable(state.world, x + dx, y + dy)) {
+      // Target tile (orthogonal or diagonal) is open — take it.
+      x += dx;
+      y += dy;
+    } else if (dx !== 0 && dy !== 0) {
+      // Diagonal blocked: slide along the wall by trying each axis alone, so a
+      // blocked corner doesn't make the player stick (TQ-017). Prefer the
+      // horizontal step, then the vertical. At an outer corner — where only the
+      // diagonal tile is a wall — both orthogonals are open and the horizontal
+      // wins: arbitrary but deterministic.
+      if (isWalkable(state.world, x + dx, y)) {
+        x += dx;
+      } else if (isWalkable(state.world, x, y + dy)) {
+        y += dy;
+      }
     }
   }
 
