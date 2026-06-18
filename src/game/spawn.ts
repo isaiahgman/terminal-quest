@@ -22,8 +22,12 @@ export function pickSpawn(world: World, rng: Rng): Vec2 {
   return rng.pick(walkable);
 }
 
-/** Manhattan distance — the cheap spacing metric used for boss placement. */
-function manhattan(a: Vec2, b: Vec2): number {
+/**
+ * Manhattan distance — the cheap spacing metric used for boss placement.
+ * Exported so the placement tests measure with the *same* metric the production
+ * code spaces by (rather than a divergent copy).
+ */
+export function manhattan(a: Vec2, b: Vec2): number {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 
@@ -41,9 +45,12 @@ export const BOSS_MIN_SEPARATION = 15;
  *
  * Spacing is enforced greedily and **degrades gracefully**: when no tile meets
  * the distance constraints (a small or cramped world), the next-best pool is
- * used so a boss is still placed rather than dropped — every roster boss must
- * exist for victory to be reachable. Returns the placed bosses in roster order;
- * the caller wraps each as a live enemy and records the count as `bossesTotal`.
+ * used — but every tier still excludes tiles already taken, so two bosses are
+ * **never** placed on the same cell (no overlapping glyphs / 2-for-1 splash).
+ * If no distinct tile remains, the world is too cramped to host the rest of the
+ * roster and placement stops there rather than stacking; the caller records how
+ * many actually landed as `bossesTotal`, so victory stays reachable (you win by
+ * clearing the bosses that exist). Returns the placed bosses in roster order.
  */
 export function placeBosses(world: World, player: Vec2, rng: Rng): Boss[] {
   const walkable: Vec2[] = [];
@@ -61,13 +68,18 @@ export function placeBosses(world: World, player: Vec2, rng: Rng): Boss[] {
   const placed: Boss[] = [];
   const taken: Vec2[] = [];
   for (const spec of BOSS_ROSTER) {
-    // Prefer tiles far from the player AND from already-placed bosses; fall back
-    // to merely-far, then to anywhere walkable, so every boss gets a home.
+    const untaken = (t: Vec2): boolean =>
+      taken.every((p) => manhattan(t, p) > 0);
+    // Prefer tiles far from the player AND spaced from placed bosses; fall back
+    // to merely-far, then anywhere walkable — but every tier excludes already-
+    // taken cells so bosses never stack. (The spaced tier excludes taken tiles
+    // implicitly, since distance 0 < BOSS_MIN_SEPARATION.)
     let pool = far.filter((t) =>
       taken.every((p) => manhattan(t, p) >= BOSS_MIN_SEPARATION),
     );
-    if (pool.length === 0) pool = far;
-    if (pool.length === 0) pool = walkable;
+    if (pool.length === 0) pool = far.filter(untaken);
+    if (pool.length === 0) pool = walkable.filter(untaken);
+    if (pool.length === 0) break; // no distinct cell left — too cramped; stop.
     const pos = rng.pick(pool);
     taken.push(pos);
     placed.push(createBoss(spec, pos));

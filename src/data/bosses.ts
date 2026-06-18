@@ -28,7 +28,7 @@ export type BossSignature =
   | { readonly kind: 'none' }
   | {
       readonly kind: 'enrage';
-      /** Health fraction in (0, 1] at or below which the boss enrages. */
+      /** Health fraction in (0, 1] below which the boss enrages (strict `<`). */
       readonly below: number;
       /** Speed multiplier applied while enraged (> 1 ⇒ faster). */
       readonly speedMultiplier: number;

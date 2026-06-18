@@ -574,6 +574,41 @@ describe('update — bosses & victory', () => {
     expect(next.status).toBe('playing');
   });
 
+  it('counts only the bosses among a mixed swarm+boss wipe in one tick', () => {
+    // A boss and a grunt both fall this tick; only the boss must increment the
+    // count — guards the `isBoss` filter (counting all slain would read 2).
+    const state: GameState = {
+      world: openWorld(10, 10),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveBoss(wall, 2, 2, 0), deadEnemy('grunt', 8, 8)],
+      bossesDefeated: 0,
+      bossesTotal: 2,
+      tooTired: false,
+      tick: 0,
+    };
+    const next = update(state, [], TICK, noRng);
+
+    expect(next.enemies).toHaveLength(0);
+    expect(next.bossesDefeated).toBe(1);
+    expect(next.status).toBe('playing');
+  });
+
+  it('keeps victory sticky across a later tick', () => {
+    const state: GameState = {
+      world: openWorld(10, 10),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [],
+      bossesDefeated: 1,
+      bossesTotal: 1,
+      status: 'victory',
+      tooTired: false,
+      tick: 0,
+    };
+    const next = update(state, [], TICK, noRng);
+    expect(next.status).toBe('victory');
+    expect(next.bossesDefeated).toBe(1);
+  });
+
   it('enrage: a low-health boss advances faster than a full-health one', () => {
     const make = (hp: number): GameState => ({
       world: openWorld(40, 40),
@@ -589,6 +624,23 @@ describe('update — bosses & victory', () => {
     const xOf = (s: GameState): number => s.enemies![0]!.enemy.pos.x;
 
     expect(xOf(enraged)).toBeLessThan(xOf(calm));
+  });
+
+  it('enrage gate is strict — a boss at exactly the threshold does not enrage', () => {
+    const make = (hp: number): GameState => ({
+      world: openWorld(40, 40),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveBoss(berserker, 35, 5, hp)],
+      tooTired: false,
+      tick: 0,
+    });
+    // hp === maxHp·below (100·0.4 = 40): `hp < maxHp·below` is false, so it
+    // advances at the same pace as a full-health (un-enraged) boss.
+    const boundary = runTicks(make(berserker.hp * 0.4), 20);
+    const calm = runTicks(make(berserker.hp), 20);
+    const xOf = (s: GameState): number => s.enemies![0]!.enemy.pos.x;
+
+    expect(xOf(boundary)).toBe(xOf(calm));
   });
 
   it('enrage is transient — the stored boss keeps its real speed', () => {

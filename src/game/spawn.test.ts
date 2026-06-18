@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   pickSpawn,
   placeBosses,
+  manhattan,
   BOSS_MIN_PLAYER_DISTANCE,
   BOSS_MIN_SEPARATION,
 } from './spawn.js';
@@ -18,12 +19,19 @@ function openWorld(size: number): World {
   return { width: size, height: size, tiles, seed: 0 };
 }
 
-/** Manhattan distance — the metric placeBosses enforces its spacing in. */
-function manhattan(
-  a: { x: number; y: number },
-  b: { x: number; y: number },
+/** An all-wall square — no walkable ground at all. */
+function wallWorld(size: number): World {
+  const tiles: Tile[][] = Array.from({ length: size }, () =>
+    Array.from({ length: size }, (): Tile => 'wall'),
+  );
+  return { width: size, height: size, tiles, seed: 0 };
+}
+
+/** Distinct-cell count for a set of placed bosses. */
+function distinctCells(
+  bosses: readonly { pos: { x: number; y: number } }[],
 ): number {
-  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  return new Set(bosses.map((b) => `${b.pos.x},${b.pos.y}`)).size;
 }
 
 /**
@@ -111,5 +119,35 @@ describe('placeBosses', () => {
     const a = placeBosses(world, player, new Rng(123));
     const b = placeBosses(world, player, new Rng(123));
     expect(a.map((boss) => boss.pos)).toEqual(b.map((boss) => boss.pos));
+  });
+
+  it('still places every boss on distinct walkable tiles when the world is too cramped to space them', () => {
+    // 5×5: max Manhattan distance (8) is below both the player-distance and the
+    // separation floors, so all three fallback tiers are exercised — yet every
+    // boss must still land, on its own cell (no stacking).
+    const world = openWorld(5);
+    const bosses = placeBosses(world, { x: 2, y: 2 }, new Rng(3));
+    expect(bosses).toHaveLength(BOSS_ROSTER.length);
+    expect(distinctCells(bosses)).toBe(bosses.length);
+    for (const boss of bosses) {
+      expect(isWalkable(world, boss.pos.x, boss.pos.y)).toBe(true);
+    }
+  });
+
+  it('never stacks two bosses on the same cell even when only one tile is free', () => {
+    // A lone walkable cell in an otherwise solid world: only one boss can be
+    // placed distinctly; the rest are dropped rather than stacked on it.
+    const tiles: Tile[][] = Array.from({ length: 5 }, (): Tile[] =>
+      Array.from({ length: 5 }, (): Tile => 'wall'),
+    );
+    tiles[2]![2] = 'floor';
+    const world: World = { width: 5, height: 5, tiles, seed: 0 };
+    const bosses = placeBosses(world, { x: 0, y: 0 }, new Rng(9));
+    expect(bosses).toHaveLength(1);
+    expect(bosses[0]!.pos).toEqual({ x: 2, y: 2 });
+  });
+
+  it('returns no bosses when the world has no walkable ground', () => {
+    expect(placeBosses(wallWorld(5), { x: 0, y: 0 }, new Rng(1))).toEqual([]);
   });
 });
