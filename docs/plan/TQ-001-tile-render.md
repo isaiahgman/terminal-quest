@@ -13,7 +13,7 @@ Merged means: a tile grid renders to a terminal-kit **ScreenBuffer** and redraws
 - [ ] A hardcoded sample map renders correctly with color
 - [ ] Repeated redraws show **no flicker/tearing**
 - [ ] Renderer is **read-only** — it never mutates `GameState`
-- [ ] `pnpm typecheck` passes
+- [ ] `npm run typecheck` passes
 
 ## Plan
 1. Minimal `GameState` with a `world.tiles` 2D array.

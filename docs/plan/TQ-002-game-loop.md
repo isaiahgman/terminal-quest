@@ -12,7 +12,7 @@ Merged means: a fixed-timestep loop runs `update()` then renders at ~12–15 fps
 - [ ] `update()` is pure (returns new/advanced state; no I/O, no drawing)
 - [ ] A visible proof of life animates each tick (e.g., a tick counter or moving glyph)
 - [ ] Loop stops cleanly on quit; no dangling timers; terminal restored
-- [ ] `pnpm typecheck` passes
+- [ ] `npm run typecheck` passes
 
 ## Plan
 1. `update(state, intents, dt, rng) → state` stub that advances something visible.

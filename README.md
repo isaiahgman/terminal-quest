@@ -11,7 +11,7 @@ Solo Leveling is addictive because it shows you a wall you *cannot* beat — the
 
 ## Play (once built)
 ```bash
-npx terminal-quest      # or: pnpm dev
+npx terminal-quest      # or: npm run dev
 ```
 
 ## How this is built — discovery-first
@@ -21,4 +21,4 @@ Every line of code traces back to a planning artifact:
 - [`docs/plan/`](docs/plan/) — the PRD/TDD decomposed into **atomic, per-PR planning artifacts**, sequenced in phases (prove the core loop, *then* add content)
 
 ## Stack
-TypeScript · [terminal-kit](https://github.com/cronvel/terminal-kit) (real-time rendering + input) · [rot.js](https://ondras.github.io/rot.js/) (procedural gen, FOV, pathfinding) · vitest · pnpm
+TypeScript · [terminal-kit](https://github.com/cronvel/terminal-kit) (real-time rendering + input) · [rot.js](https://ondras.github.io/rot.js/) (procedural gen, FOV, pathfinding) · vitest · npm

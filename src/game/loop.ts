@@ -1,10 +1,13 @@
 import { performance } from 'node:perf_hooks';
 import { type GameState } from './state.js';
-import { type Intent, SIM_DT, update } from './update.js';
+import { type RngFn } from './combat.js';
+import { type Intent, SIM_DT, SIM_DT_SECONDS, update } from './update.js';
 
 export interface LoopHooks {
   /** Pull (and clear) the intents collected since the last tick. */
   drainIntents: () => readonly Intent[];
+  /** Injected seeded randomness for the sim (attack rolls); see `combat.ts`. */
+  rng: RngFn;
   /** Draw the current state (read-only). */
   render: (state: GameState) => void;
   /** Return true to end the loop. */
@@ -37,8 +40,18 @@ export function runLoop(initial: GameState, hooks: LoopHooks): void {
     last = now;
 
     let advanced = false;
+    // Drain once per simulation step, not once per frame: each fixed step is a
+    // discrete tick of simulated time and must consume its own intents. The
+    // input layer's `drain()` re-emits each still-held direction every call (so a
+    // held move advances one tile per step, staying in lockstep with the enemies
+    // that also step here), while a one-shot intent (a single attack/tap) is
+    // returned by exactly one drain and never replayed — so a multi-step catch-up
+    // frame can't turn one keypress into several swings. A sub-step frame
+    // (`acc < SIM_DT`) runs the loop zero times, so it never drains; held intents
+    // simply persist to the next frame, and one-shots are still buffered.
     while (acc >= SIM_DT) {
-      state = update(state, hooks.drainIntents());
+      const intents = hooks.drainIntents();
+      state = update(state, intents, SIM_DT_SECONDS, hooks.rng);
       acc -= SIM_DT;
       advanced = true;
     }
