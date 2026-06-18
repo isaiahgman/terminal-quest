@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { createEnemy, ENEMY_TYPES, type EnemyKind } from './enemy.js';
+import { createEnemy, ENEMY_TYPES, type SwarmKind } from './enemy.js';
 
-const KINDS = Object.keys(ENEMY_TYPES) as EnemyKind[];
+const KINDS = Object.keys(ENEMY_TYPES) as SwarmKind[];
 
 describe('createEnemy', () => {
   it('stamps every table stat field onto the instance for every kind', () => {

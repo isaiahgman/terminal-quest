@@ -8,10 +8,11 @@ import {
   type Tile,
   type World,
 } from './state.js';
-import { createEnemy, type EnemyKind } from './enemy.js';
+import { createEnemy, type SwarmKind } from './enemy.js';
 import { createEnemyAi } from './entities.js';
 import { createProgression, xpForKill, xpToNext } from './progression.js';
 import type { RngFn } from './combat.js';
+import { createBoss, type BossSpec, TOTAL_BOSSES } from '../data/bosses.js';
 
 /** One tick in seconds — the unit `update` advances the sim by. */
 const TICK = SIM_DT_SECONDS;
@@ -51,12 +52,12 @@ function openWorld(w: number, h: number): World {
   return { width: w, height: h, tiles, seed: 0 };
 }
 
-function liveEnemy(kind: EnemyKind, x: number, y: number): LiveEnemy {
+function liveEnemy(kind: SwarmKind, x: number, y: number): LiveEnemy {
   return { enemy: createEnemy(kind, { x, y }), ai: createEnemyAi() };
 }
 
 /** A LiveEnemy already at 0 hp — "slain", for exercising the kill→XP cull. */
-function deadEnemy(kind: EnemyKind, x: number, y: number): LiveEnemy {
+function deadEnemy(kind: SwarmKind, x: number, y: number): LiveEnemy {
   const base = liveEnemy(kind, x, y);
   return { ...base, enemy: { ...base.enemy, hp: 0 } };
 }
@@ -528,5 +529,206 @@ describe('update — kill → XP hook (TQ-009)', () => {
 
     expect(state.enemies![0]!.enemy.hp).toBe(0);
     expect(state.player.progress).toEqual(progress);
+  });
+});
+
+describe('update — bosses & victory', () => {
+  /** A pure stat-wall boss (no signature behaviour). */
+  const wall: BossSpec = {
+    id: 'wall',
+    name: 'Wall',
+    hp: 100,
+    atk: 6,
+    def: 0,
+    speed: 3,
+    glyph: 'W',
+    color: 'red',
+    signature: { kind: 'none' },
+  };
+
+  /** A fast enrage boss, for isolating the signature speed boost in `advance`. */
+  const berserker: BossSpec = {
+    id: 'berserker',
+    name: 'Berserker',
+    hp: 100,
+    atk: 6,
+    def: 0,
+    speed: 6,
+    glyph: 'Z',
+    color: 'red',
+    signature: { kind: 'enrage', below: 0.4, speedMultiplier: 2 },
+  };
+
+  /** A live boss of `spec` at (x, y), optionally pre-damaged to `hp`. */
+  function liveBoss(
+    spec: BossSpec,
+    x: number,
+    y: number,
+    hp?: number,
+  ): LiveEnemy {
+    const boss = createBoss(spec, { x, y });
+    return {
+      enemy: hp === undefined ? boss : { ...boss, hp },
+      ai: createEnemyAi(),
+    };
+  }
+
+  /** Run `n` input-free ticks (no attack ⇒ the rng is never consumed). */
+  function runTicks(state: GameState, n: number): GameState {
+    let s = state;
+    for (let i = 0; i < n; i++) s = update(s, [], TICK, noRng);
+    return s;
+  }
+
+  it('a boss killed by an attack increments the count but does not yet win', () => {
+    expect(TOTAL_BOSSES).toBeGreaterThan(1); // the "not yet" half assumes >1 boss
+    const state: GameState = {
+      world: openWorld(10, 10),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveBoss(wall, 6, 5, 1)],
+      bossesDefeated: 0,
+      tooTired: false,
+      tick: 0,
+    };
+    // Quick Jab (radius 1.5) reaches the adjacent boss; a 0 roll lands the hit.
+    const next = update(
+      state,
+      [{ type: 'attack', attackId: 'quick-jab' }],
+      TICK,
+      scriptedRng([0]),
+    );
+
+    expect(next.enemies).toHaveLength(0);
+    expect(next.bossesDefeated).toBe(1);
+    expect(next.status).toBe('playing'); // 1 < TOTAL_BOSSES
+  });
+
+  it('declares victory once the whole roster (TOTAL_BOSSES) is down', () => {
+    // Pre-slain bosses, one per roster slot, all culled this tick → the count
+    // reaches TOTAL_BOSSES and the run flips to victory. Generic over the roster
+    // size so growing it to 10 keeps the test honest.
+    const enemies = Array.from({ length: TOTAL_BOSSES }, (_, i) =>
+      liveBoss(wall, i, 0, 0),
+    );
+    const state: GameState = {
+      world: openWorld(Math.max(TOTAL_BOSSES, 2) + 1, 2),
+      player: createPlayer({ x: 0, y: 1 }),
+      enemies,
+      bossesDefeated: 0,
+      tooTired: false,
+      tick: 0,
+    };
+    const next = update(state, [], TICK, noRng);
+
+    expect(next.enemies).toHaveLength(0);
+    expect(next.bossesDefeated).toBe(TOTAL_BOSSES);
+    expect(next.status).toBe('victory');
+  });
+
+  it('never declares victory in a state with no bosses', () => {
+    const state = makeState({ enemies: [deadEnemy('grunt', 1, 1)] });
+    const next = update(state, [], TICK, noRng);
+    expect(next.bossesDefeated).toBe(0);
+    expect(next.status).toBe('playing');
+  });
+
+  it('counts only the bosses among a mixed swarm+boss wipe in one tick', () => {
+    expect(TOTAL_BOSSES).toBeGreaterThan(1); // so one boss down ⇒ not yet victory
+    // A boss and a grunt both fall this tick; only the boss must increment the
+    // count — guards the `isBoss` filter (counting all slain would read 2).
+    const state: GameState = {
+      world: openWorld(10, 10),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveBoss(wall, 2, 2, 0), deadEnemy('grunt', 8, 8)],
+      bossesDefeated: 0,
+      tooTired: false,
+      tick: 0,
+    };
+    const next = update(state, [], TICK, noRng);
+
+    expect(next.enemies).toHaveLength(0);
+    expect(next.bossesDefeated).toBe(1);
+    expect(next.status).toBe('playing');
+  });
+
+  it('keeps victory sticky across a later tick', () => {
+    const state: GameState = {
+      world: openWorld(10, 10),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [],
+      bossesDefeated: TOTAL_BOSSES,
+      status: 'victory',
+      tooTired: false,
+      tick: 0,
+    };
+    const next = update(state, [], TICK, noRng);
+    expect(next.status).toBe('victory');
+    expect(next.bossesDefeated).toBe(TOTAL_BOSSES);
+  });
+
+  it('enrage: a low-health boss advances faster than a full-health one', () => {
+    const make = (hp: number): GameState => ({
+      world: openWorld(40, 40),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveBoss(berserker, 35, 5, hp)],
+      tooTired: false,
+      tick: 0,
+    });
+    // Full health ⇒ not enraged; below 0.4·maxHp ⇒ enraged the whole run. Both
+    // stay outside the charge radius over 20 ticks, so only enrage differs.
+    const calm = runTicks(make(berserker.hp), 20);
+    const enraged = runTicks(make(30), 20);
+    const xOf = (s: GameState): number => s.enemies![0]!.enemy.pos.x;
+
+    expect(xOf(enraged)).toBeLessThan(xOf(calm));
+  });
+
+  it('enrage gate is strict — a boss at exactly the threshold does not enrage', () => {
+    const make = (hp: number): GameState => ({
+      world: openWorld(40, 40),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveBoss(berserker, 35, 5, hp)],
+      tooTired: false,
+      tick: 0,
+    });
+    // hp === maxHp·below (100·0.4 = 40): `hp < maxHp·below` is false, so it
+    // advances at the same pace as a full-health (un-enraged) boss.
+    const boundary = runTicks(make(berserker.hp * 0.4), 20);
+    const calm = runTicks(make(berserker.hp), 20);
+    const xOf = (s: GameState): number => s.enemies![0]!.enemy.pos.x;
+
+    expect(xOf(boundary)).toBe(xOf(calm));
+  });
+
+  it('enrage stacks on charge — an enraged boss inside the charge radius closes faster', () => {
+    // Both bosses start Chebyshev 4 from the player (= CHARGE_RADIUS) and stay
+    // within it, so both are charging every tick; the enraged one additionally
+    // gets its signature ×mult, so enrage and charge compound (×4 vs ×2) and it
+    // closes strictly faster. Pins the in-combat case the other enrage tests
+    // (out at range 30, pure advance) never exercise.
+    const make = (hp: number): GameState => ({
+      world: openWorld(12, 12),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveBoss(berserker, 5, 9, hp)], // Chebyshev 4 → in charge range
+      tooTired: false,
+      tick: 0,
+    });
+    const calm = runTicks(make(berserker.hp), 2);
+    const enraged = runTicks(make(30), 2);
+    const yOf = (s: GameState): number => s.enemies![0]!.enemy.pos.y;
+
+    expect(yOf(enraged)).toBeLessThan(yOf(calm));
+  });
+
+  it('enrage is transient — the stored boss keeps its real speed', () => {
+    const state: GameState = {
+      world: openWorld(40, 40),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveBoss(berserker, 35, 5, 30)],
+      tooTired: false,
+      tick: 0,
+    };
+    const next = update(state, [], TICK, noRng);
+    expect(next.enemies![0]!.enemy.speed).toBe(berserker.speed);
   });
 });

@@ -1,4 +1,9 @@
-import { type GameState, type LiveEnemy, isWalkable } from './state.js';
+import {
+  type GameState,
+  type GameStatus,
+  type LiveEnemy,
+  isWalkable,
+} from './state.js';
 import {
   type Combatant,
   type RngFn,
@@ -8,6 +13,8 @@ import {
 import { contactDamage, stepEnemy } from './entities.js';
 import { createProgression, gainXp, xpForKill } from './progression.js';
 import { ATTACKS, type AttackId } from '../data/attacks.js';
+import type { Enemy } from './enemy.js';
+import { type Boss, TOTAL_BOSSES } from '../data/bosses.js';
 
 /** A player-issued action for one tick. (More variants land in later PRs.) */
 export interface MoveIntent {
@@ -46,6 +53,30 @@ function playerCombatant(player: GameState['player']): Combatant {
     atk: progress.atk,
     def: player.def,
   };
+}
+
+/** A boss is an enemy whose archetype tag is `'boss'` (only `createBoss` sets it). */
+function isBoss(enemy: Enemy): enemy is Boss {
+  return enemy.kind === 'boss';
+}
+
+/**
+ * The enemy as this tick's movement step should see it: an `enrage` boss below
+ * its health threshold moves at a multiple of its speed (the signature
+ * behaviour, TQ-011), reusing the move-budget path in {@link stepEnemy} rather
+ * than a bespoke one. Every other enemy is returned unchanged. The boosted copy
+ * is transient — used only for the step calculation, never stored — so the
+ * boss keeps its real `speed` (see the survivors loop below).
+ */
+function steppingEnemy(enemy: Enemy): Enemy {
+  if (
+    isBoss(enemy) &&
+    enemy.signature.kind === 'enrage' &&
+    enemy.hp < enemy.maxHp * enemy.signature.below
+  ) {
+    return { ...enemy, speed: enemy.speed * enemy.signature.speedMultiplier };
+  }
+  return enemy;
 }
 
 /**
@@ -103,6 +134,8 @@ export function update(
   let player = { ...state.player, pos: { x, y } };
   let enemies = state.enemies;
   let tooTired = false;
+  let bossesDefeated = state.bossesDefeated ?? 0;
+  let status: GameStatus = state.status ?? 'playing';
 
   // --- Attack: resolve a radius swing against the enemies in reach. ---
   if (lastAttack !== undefined) {
@@ -149,6 +182,19 @@ export function update(
         ...player,
         progress: gainXp(player.progress ?? createProgression(), awarded),
       };
+
+      // Bosses are slain through the same path as a normal enemy; count the
+      // ones that fell this tick and declare victory once `TOTAL_BOSSES` (the
+      // roster length — the same denominator the HUD shows) are down (TQ-011).
+      // Gated on a boss actually dying this tick, so a no-boss game never wins;
+      // the `> 0` guard keeps an empty roster from auto-winning at 0/0.
+      const slainBosses = slain.filter(({ enemy }) => isBoss(enemy)).length;
+      if (slainBosses > 0) {
+        bossesDefeated += slainBosses;
+        if (TOTAL_BOSSES > 0 && bossesDefeated >= TOTAL_BOSSES) {
+          status = 'victory';
+        }
+      }
     }
   }
 
@@ -164,8 +210,16 @@ export function update(
     const walkable = (ex: number, ey: number): boolean =>
       isWalkable(state.world, ex, ey);
     enemies = enemies.map((live): LiveEnemy => {
-      const next = stepEnemy(live.enemy, live.ai, player.pos, walkable, dt);
-      return { enemy: next.enemy, ai: next.ai };
+      const next = stepEnemy(
+        steppingEnemy(live.enemy),
+        live.ai,
+        player.pos,
+        walkable,
+        dt,
+      );
+      // Take only the new position back onto the real enemy, so a transient
+      // enrage speed boost (steppingEnemy) never persists on the stored entity.
+      return { enemy: { ...live.enemy, pos: next.enemy.pos }, ai: next.ai };
     });
 
     // --- Contact damage: adjacent enemies chip the player (floored at 0). ---
@@ -187,6 +241,8 @@ export function update(
     player,
     enemies,
     tooTired,
+    bossesDefeated,
+    status,
     tick: state.tick + 1,
   };
 }

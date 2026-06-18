@@ -12,6 +12,7 @@
 
 import { type GameState } from '../game/state.js';
 import { createProgression, xpToNext } from '../game/progression.js';
+import { TOTAL_BOSSES } from '../data/bosses.js';
 
 /**
  * Rows the HUD reserves at the bottom of the screen. The renderer shrinks the
@@ -21,10 +22,11 @@ export const HUD_ROWS = 3;
 
 /**
  * Win condition: defeat all of these bosses (prd §7/F7). The HUD reads
- * `bossesDefeated / TOTAL_BOSSES`, showing `0/10` until TQ-011 spawns bosses and
- * drives the counter. Inline here until the bosses module owns the real source.
+ * `bossesDefeated / TOTAL_BOSSES`. Now owned by the bosses module (= the roster
+ * length, the single source the victory check also uses) and re-exported here so
+ * the HUD's display and the win trigger can never disagree.
  */
-export const TOTAL_BOSSES = 10;
+export { TOTAL_BOSSES };
 
 /** Width, in cells, of the health/stamina bars. */
 const BAR_WIDTH = 12;
