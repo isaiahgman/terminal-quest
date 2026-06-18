@@ -70,6 +70,13 @@ export interface GameState {
    */
   enemies?: readonly LiveEnemy[];
   /**
+   * Bosses the player has defeated, of the {@link TOTAL_BOSSES} that are the win
+   * condition (prd §7/F7). Optional during incremental wiring — the HUD reads
+   * `0` until TQ-011 spawns bosses and makes this authoritative (TQ-008 wires the
+   * field now so the HUD has a stable thing to display).
+   */
+  bossesDefeated?: number;
+  /**
    * Set when the player tried to attack this tick but lacked the stamina — the
    * data behind the brief "too tired" cue. The HUD surfaces it (TQ-008); for now
    * it makes the stamina gate observable and testable.

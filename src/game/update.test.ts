@@ -89,15 +89,17 @@ describe('update — movement', () => {
     expect(next.player.pos).toEqual({ x: 2, y: 1 });
   });
 
-  it('blocks movement into a wall', () => {
-    // up-left from center lands on the (0,0) corner wall → blocked
+  it('blocks an orthogonal move into a wall', () => {
+    // From the top of the plus (1,0), a leftward step targets the (0,0) corner
+    // wall. It is orthogonal — no diagonal slide applies — so the player stays.
+    // (A blocked *diagonal* slides instead; see the wall-slide suite below.)
     const next = update(
-      makeState(),
-      [{ type: 'move', dx: -1, dy: -1 }],
+      makeState({ player: createPlayer({ x: 1, y: 0 }) }),
+      [{ type: 'move', dx: -1, dy: 0 }],
       TICK,
       noRng,
     );
-    expect(next.player.pos).toEqual({ x: 1, y: 1 });
+    expect(next.player.pos).toEqual({ x: 1, y: 0 });
   });
 
   it('increments the tick every call', () => {
@@ -182,6 +184,61 @@ describe('update — movement', () => {
         noRng,
       ).tick,
     ).toBe(1);
+  });
+});
+
+describe('update — diagonal wall-slide (TQ-017)', () => {
+  // A compact 3x3 world: '#' = wall, '.' = floor. The player starts at the
+  // centre (1,1) and pushes up-right {dx:1, dy:-1}, whose diagonal target is the
+  // top-right corner (2,0). Each case walls a different combination so the
+  // per-axis slide is exercised in isolation.
+  const world = (rows: [string, string, string]): World => ({
+    width: 3,
+    height: 3,
+    tiles: rows.map((row) =>
+      [...row].map((c): Tile => (c === '#' ? 'wall' : 'floor')),
+    ),
+    seed: 0,
+  });
+  const pushUpRight = (rows: [string, string, string]): GameState =>
+    update(
+      makeState({ world: world(rows), player: createPlayer({ x: 1, y: 1 }) }),
+      [{ type: 'move', dx: 1, dy: -1 }],
+      TICK,
+      noRng,
+    );
+
+  it('slides horizontally when the diagonal and the vertical are blocked', () => {
+    // corner (2,0) and the tile above (1,0) are walls; the side (2,1) is open.
+    expect(pushUpRight(['.##', '...', '...']).player.pos).toEqual({
+      x: 2,
+      y: 1,
+    });
+  });
+
+  it('slides vertically when the diagonal and the horizontal are blocked', () => {
+    // corner (2,0) and the side (2,1) are walls; the tile above (1,0) is open.
+    expect(pushUpRight(['..#', '..#', '...']).player.pos).toEqual({
+      x: 1,
+      y: 0,
+    });
+  });
+
+  it('stays put when the diagonal and both orthogonals are blocked', () => {
+    // corner (2,0), above (1,0), and side (2,1) all walls → nowhere to slide.
+    expect(pushUpRight(['.##', '..#', '...']).player.pos).toEqual({
+      x: 1,
+      y: 1,
+    });
+  });
+
+  it('prefers the horizontal at an outer corner where both orthogonals are open', () => {
+    // only the diagonal corner (2,0) is a wall; (2,1) and (1,0) are both open —
+    // the deterministic tie-break takes the horizontal step.
+    expect(pushUpRight(['..#', '...', '...']).player.pos).toEqual({
+      x: 2,
+      y: 1,
+    });
   });
 });
 
