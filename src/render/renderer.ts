@@ -13,6 +13,13 @@ const SYNC_OFF = '\x1b[?2026l';
  * Read-only renderer: draws a GameState into one full-screen ScreenBuffer and
  * flushes the delta. Never mutates state. Draws only the camera viewport, so
  * cost is proportional to the screen, not the (much larger) world.
+ *
+ * Sizing: the ScreenBuffer is sized once from the terminal at construction.
+ * terminal-kit's ScreenBuffer has no resize, so mid-game terminal resize is
+ * unsupported — the viewport keeps the original dimensions until restart. This
+ * is safe (not garbled): `render` drives its loop off `this.screen.width/height`
+ * and clamps enemies/player to that viewport, so it never draws past the buffer.
+ * The buffer simply won't grow/shrink to track a resized terminal.
  */
 export class Renderer {
   private readonly screen: terminalKit.ScreenBuffer;
