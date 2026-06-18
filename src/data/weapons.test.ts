@@ -80,6 +80,14 @@ describe('applyWeapon', () => {
     expect(out.staminaCost).toBe(0);
   });
 
+  it('does NOT clamp damage — a negative damageBonus can lower it below the unarmed value', () => {
+    // Asymmetric on purpose: radius/staminaCost clamp to >= 0, but damage is
+    // left un-floored because resolveAttack already floors a *landed hit* at 1.
+    // Pins the contract so a future Math.max(0, ...) "fix" can't slip in.
+    const out = applyWeapon(BASE_SPEC, { name: 'Frail', damageBonus: -2 });
+    expect(out.damage).toBe(3); // 5 - 2, not clamped to 0 or up to 5
+  });
+
   it('treats non-finite modifiers as zero so they cannot poison the damage math', () => {
     const out = applyWeapon(BASE_SPEC, {
       name: 'Cursed',
@@ -151,5 +159,35 @@ describe('applyWeapon ∘ resolveAttack — the engine actually deals more', () 
     expect(armed.outcomes[0]!.damage).toBeGreaterThan(
       unarmed.outcomes[0]!.damage,
     );
+  });
+
+  it("a weapon's radiusBonus extends who the engine can actually hit", () => {
+    // A target straddling the reach gap: dist² = 6.25 sits outside the unarmed
+    // radius² (2² = 4) but inside the warhammer-armed radius² (3² = 9). So the
+    // *engine's own target selection* — not just the pinned radius number —
+    // must let the armed swing reach it while the unarmed swing whiffs.
+    const farTarget = (): Combatant => ({
+      pos: { x: 2.5, y: 0 }, // dist² from (0,0) = 6.25
+      hp: 100,
+      stamina: 0,
+      maxStamina: 0,
+      atk: 0,
+      def: 0,
+    });
+    const unarmed = resolveAttack(
+      attacker,
+      [farTarget()],
+      applyWeapon(BASE_SPEC, undefined),
+      rng,
+    );
+    const armed = resolveAttack(
+      attacker,
+      [farTarget()],
+      applyWeapon(BASE_SPEC, WEAPONS['warhammer']),
+      rng,
+    );
+    expect(unarmed.outcomes).toHaveLength(0); // out of reach unarmed
+    expect(armed.outcomes).toHaveLength(1); // brought into reach by the weapon
+    expect(armed.outcomes[0]!.hit).toBe(true);
   });
 });
