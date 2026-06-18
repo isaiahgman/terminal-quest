@@ -7,7 +7,7 @@ type Term = typeof terminalKit.terminal;
 
 /** DEC private mode 2026 — synchronized output, so a frame composites atomically. */
 const SYNC_ON = '\x1b[?2026h';
-const SYNC_OFF = '\x1b[?2026l';
+export const SYNC_OFF = '\x1b[?2026l';
 
 /**
  * Read-only renderer: draws a GameState into one full-screen ScreenBuffer and
