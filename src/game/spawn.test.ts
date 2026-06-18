@@ -114,11 +114,16 @@ describe('placeBosses', () => {
     }
   });
 
-  it('is deterministic: the same seed yields identical placements', () => {
+  it('is deterministic and places one boss per roster entry, in order', () => {
     const world = openWorld(60);
     const a = placeBosses(world, player, new Rng(123));
     const b = placeBosses(world, player, new Rng(123));
     expect(a.map((boss) => boss.pos)).toEqual(b.map((boss) => boss.pos));
+    // Order matters: the HUD count and victory rely on roster-ordered placement,
+    // so a stable-position-but-scrambled-order regression must still fail here.
+    expect(a.map((boss) => boss.id)).toEqual(
+      BOSS_ROSTER.map((spec) => spec.id),
+    );
   });
 
   it('still places every boss on distinct walkable tiles when the world is too cramped to space them', () => {

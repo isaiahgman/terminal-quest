@@ -700,6 +700,26 @@ describe('update — bosses & victory', () => {
     expect(xOf(boundary)).toBe(xOf(calm));
   });
 
+  it('enrage stacks on charge — an enraged boss inside the charge radius closes faster', () => {
+    // Both bosses start Chebyshev 4 from the player (= CHARGE_RADIUS) and stay
+    // within it, so both are charging every tick; the enraged one additionally
+    // gets its signature ×mult, so enrage and charge compound (×4 vs ×2) and it
+    // closes strictly faster. Pins the in-combat case the other enrage tests
+    // (out at range 30, pure advance) never exercise.
+    const make = (hp: number): GameState => ({
+      world: openWorld(12, 12),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveBoss(berserker, 5, 9, hp)], // Chebyshev 4 → in charge range
+      tooTired: false,
+      tick: 0,
+    });
+    const calm = runTicks(make(berserker.hp), 2);
+    const enraged = runTicks(make(30), 2);
+    const yOf = (s: GameState): number => s.enemies![0]!.enemy.pos.y;
+
+    expect(yOf(enraged)).toBeLessThan(yOf(calm));
+  });
+
   it('enrage is transient — the stored boss keeps its real speed', () => {
     const state: GameState = {
       world: openWorld(40, 40),
