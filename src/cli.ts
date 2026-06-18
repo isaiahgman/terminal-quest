@@ -104,6 +104,10 @@ async function main(): Promise<void> {
     console.error(err);
     shutdown(1);
   });
+  process.on('unhandledRejection', (reason: unknown) => {
+    console.error(reason);
+    shutdown(1);
+  });
   // A piped consumer (e.g. `tq | head`) closing stdout makes the next write
   // raise EPIPE; without a listener Node throws and leaves the terminal dirty.
   // Treat the departed reader as a clean exit, any other stream error as a fault.

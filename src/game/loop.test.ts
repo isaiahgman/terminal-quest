@@ -25,15 +25,20 @@ function makeState(): GameState {
 /**
  * A recording hooks stub. `lastTick` is the `tick` of the most recently
  * rendered state — since `update` is pure and bumps `tick`, it doubles as the
- * count of update steps that have run. `renders`/`onStops` count those calls.
+ * count of update steps that have run. `drains`/`renders`/`onStops` count those
+ * calls.
  */
 function recorder(stop = false): LoopHooks & {
   lastTick: number;
+  drains: number;
   renders: number;
   onStops: number;
 } {
   const rec = {
-    drainIntents: (): [] => [],
+    drainIntents(): [] {
+      this.drains += 1;
+      return [];
+    },
     rng: (): number => 0,
     render(state: GameState): void {
       this.lastTick = state.tick;
@@ -44,6 +49,7 @@ function recorder(stop = false): LoopHooks & {
       this.onStops += 1;
     },
     lastTick: -1,
+    drains: 0,
     renders: 0,
     onStops: 0,
   };
@@ -79,6 +85,7 @@ describe('runLoop', () => {
 
     expect(rec.lastTick).toBe(1); // one update step (tick 0 -> 1)
     expect(rec.renders).toBe(2); // initial frame + this frame
+    expect(rec.drains).toBe(1); // drained once, for the single step
   });
 
   it('a 3*SIM_DT gap runs update 3x but renders only once (catch-up)', () => {
@@ -92,6 +99,7 @@ describe('runLoop', () => {
 
     expect(rec.lastTick).toBe(3); // three update steps in the catch-up loop
     expect(rec.renders).toBe(2); // initial frame + one render after catching up
+    expect(rec.drains).toBe(3); // drained once per step in the catch-up loop
   });
 
   it('a gap shorter than SIM_DT runs neither update nor render', () => {
@@ -103,6 +111,7 @@ describe('runLoop', () => {
 
     expect(rec.lastTick).toBe(0); // never advanced past the initial state
     expect(rec.renders).toBe(1); // only the initial frame; no second draw
+    expect(rec.drains).toBe(0); // no step ran, so no drain
   });
 
   it('clamps a long stall to MAX_FRAME_MS — no runaway catch-up', () => {

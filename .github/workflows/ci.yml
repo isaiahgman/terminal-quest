@@ -5,6 +5,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # Run on the merge queue's temporary branch so the required check is
+  # satisfied for the (latest main + PR) combination before it lands.
+  merge_group:
 
 # Cancel an in-progress run when a branch/PR gets new commits.
 concurrency:
