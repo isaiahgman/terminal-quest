@@ -13,6 +13,13 @@ const SYNC_OFF = '\x1b[?2026l';
  * Read-only renderer: draws a GameState into one full-screen ScreenBuffer and
  * flushes the delta. Never mutates state. Draws only the camera viewport, so
  * cost is proportional to the screen, not the (much larger) world.
+ *
+ * Sizing: the ScreenBuffer is sized once from the terminal at construction.
+ * terminal-kit's ScreenBuffer has no resize, so mid-game terminal resize is
+ * unsupported — the viewport keeps the original dimensions until restart. This
+ * is safe (not garbled): `render` drives its loop off `this.screen.width/height`
+ * and clamps enemies/player to that viewport, so it never draws past the buffer.
+ * The buffer simply won't grow/shrink to track a resized terminal.
  */
 export class Renderer {
   private readonly screen: terminalKit.ScreenBuffer;
@@ -36,13 +43,28 @@ export class Renderer {
       state.world.height,
     );
 
+    // One reusable put-options object for the viewport cell loop, so the hot
+    // loop allocates nothing per cell regardless of viewport size. Every glyph
+    // here defines a background, so `bgColor` is always set to a valid name
+    // before each put — important because terminal-kit's object2attr mutates
+    // this attr object in place (e.g. rewriting colour names to numeric
+    // indices); reassigning fresh valid values each iteration keeps it sound.
+    const cellOpts = {
+      x: 0,
+      y: 0,
+      attr: { color: '', bold: false, bgColor: '' },
+      wrap: false,
+      dx: 1,
+      dy: 0,
+    };
     for (let sy = 0; sy < height; sy++) {
       for (let sx = 0; sx < width; sx++) {
         const g = glyphForTile(tileAt(state.world, cam.x + sx, cam.y + sy));
-        this.screen.put(
-          { x: sx, y: sy, attr: cellAttr(g, false), wrap: false, dx: 1, dy: 0 },
-          g.char,
-        );
+        cellOpts.x = sx;
+        cellOpts.y = sy;
+        cellOpts.attr.color = g.color;
+        cellOpts.attr.bgColor = g.bg ?? '';
+        this.screen.put(cellOpts, g.char);
       }
     }
 

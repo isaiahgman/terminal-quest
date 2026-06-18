@@ -12,7 +12,7 @@ Merged means: there's a base location the player returns to; it visibly grows wi
 - [ ] The base **grows** based on progress (e.g., bosses defeated / resources) — a visible change, and ideally a tangible buff
 - [ ] Base state is part of the save and persists across relaunch
 - [ ] Returning to base is safe/low-pressure (a breather from the swarm)
-- [ ] `pnpm typecheck` passes
+- [ ] `npm run typecheck` passes
 
 ## Plan
 1. `base.ts`: base state + growth rules tied to progress.
