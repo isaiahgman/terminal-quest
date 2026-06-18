@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks';
-import type { Intent } from '../game/update.js';
+import type { Intent, MoveIntent } from '../game/update.js';
 import type { KeyEvent } from './keyDecoder.js';
 import { ATTACK_KEYS } from '../data/attacks.js';
 
@@ -58,13 +58,6 @@ const KEY_TO_DIRECTION: Record<string, Direction> = {
   a: 'left',
   RIGHT: 'right',
   d: 'right',
-};
-
-const DIRECTION_DELTA: Record<Direction, { dx: number; dy: number }> = {
-  up: { dx: 0, dy: -1 },
-  down: { dx: 0, dy: 1 },
-  left: { dx: -1, dy: 0 },
-  right: { dx: 1, dy: 0 },
 };
 
 function isQuit(name: string): boolean {
@@ -129,13 +122,10 @@ export class Input {
     }
     const dir = KEY_TO_DIRECTION[name];
     if (dir !== undefined) {
-      // Re-seat the direction at the end of the Map so the most-recently
-      // pressed direction is always last in iteration order. `update()` applies
-      // only the *last* move intent per tick, so without the delete a re-press
-      // of an already-held direction keeps its old slot and a quick reversal
-      // (up → down → up) stays stuck on the previous direction. delete-then-set
-      // makes "last pressed wins" actually true.
-      this.held.delete(dir);
+      // Refresh this direction's timestamp. `resolveAxis()` decides a contested
+      // axis by comparing these stamps (last-pressed-wins), so a re-press of the
+      // newer key is what flips a quick reversal — `set` updates the value in
+      // place, no Map re-seating needed. The fresh stamp also resets expiry.
       this.held.set(dir, this.now());
       return;
     }
@@ -152,27 +142,70 @@ export class Input {
   }
 
   /**
-   * Emit one move intent per still-held direction, then any attack intents
+   * Emit the single combined move intent for the still-held directions (see
+   * {@link resolveMove} — true 8-direction movement), then any attack intents
    * pressed since the last drain. Stale directions expire after the active
    * window — {@link HELD_WINDOW_MS} in the timeout tier, the long
    * {@link RELEASE_SAFETY_NET_MS} backstop in the release tier (where real
    * key-up normally removes them first). Attacks fire exactly once.
    */
   drain(): Intent[] {
-    const now = this.now();
-    const expiry = this.releaseDriven ? RELEASE_SAFETY_NET_MS : HELD_WINDOW_MS;
+    this.expireStaleHolds();
+
     const intents: Intent[] = [];
-    for (const [dir, lastSeen] of this.held) {
-      if (now - lastSeen > expiry) {
-        this.held.delete(dir);
-        continue;
-      }
-      const delta = DIRECTION_DELTA[dir];
-      intents.push({ type: 'move', dx: delta.dx, dy: delta.dy });
-    }
+    const move = this.resolveMove();
+    if (move !== undefined) intents.push(move);
     intents.push(...this.attackIntents);
     this.attackIntents = [];
     return intents;
+  }
+
+  /**
+   * Drop directions whose last event is older than the active window —
+   * {@link HELD_WINDOW_MS} in the timeout tier, the long
+   * {@link RELEASE_SAFETY_NET_MS} backstop in the release tier (where a real
+   * key-up has normally removed them already).
+   */
+  private expireStaleHolds(): void {
+    const now = this.now();
+    const expiry = this.releaseDriven ? RELEASE_SAFETY_NET_MS : HELD_WINDOW_MS;
+    for (const [dir, lastSeen] of this.held) {
+      if (now - lastSeen > expiry) this.held.delete(dir);
+    }
+  }
+
+  /**
+   * Collapse the still-held directions into a **single** move intent — true
+   * 8-direction movement (TQ-017). Each axis is resolved independently by
+   * **last-pressed-wins**: when both opposing directions are held, the
+   * more-recently-pressed one takes that axis (never both, never a cancelling
+   * standstill). A naive `right − left` sum would instead cancel to zero, which
+   * in the timeout tier — where a release is only inferred by timeout — would
+   * stall a quick reversal for up to one {@link HELD_WINDOW_MS} while the stale
+   * opposite still lingers; last-pressed-wins keeps TQ-016's crisp reversal.
+   * Returns undefined when nothing resolves to a step.
+   */
+  private resolveMove(): MoveIntent | undefined {
+    const dx = this.resolveAxis('right', 'left');
+    const dy = this.resolveAxis('down', 'up');
+    if (dx === 0 && dy === 0) return undefined;
+    return { type: 'move', dx, dy };
+  }
+
+  /**
+   * Resolve one axis to +1 (the positive direction), −1 (the negative), or 0
+   * (neither held). When both are held the larger timestamp — the more recent
+   * press or repeat — wins; an exact tie falls to the positive direction (real
+   * presses never tie, so this only pins determinism for the clock-injected
+   * tests).
+   */
+  private resolveAxis(positive: Direction, negative: Direction): number {
+    const pos = this.held.get(positive);
+    const neg = this.held.get(negative);
+    if (pos === undefined && neg === undefined) return 0;
+    if (neg === undefined) return 1;
+    if (pos === undefined) return -1;
+    return pos >= neg ? 1 : -1;
   }
 
   get shouldQuit(): boolean {
