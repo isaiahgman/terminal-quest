@@ -23,4 +23,9 @@ Merged means: weapons drop in the world; walking over one picks it up; it equips
 - One slot only (no inventory in v1). Reuse the combat engine's damage path — don't fork it.
 
 ## Notes
-- A starting basic weapon makes the MVP playable. Upgrade/rarity is a later stretch.
+- Upgrade/rarity is a later stretch.
+- **Ships as two PRs.** (1) the pure module `src/data/weapons.ts` (+ tests) — weapon data + `applyWeapon`, no wiring; (2) integration into the world/loop/HUD after TQ-008 lands `hud.ts`.
+- **Design decisions (2026-06-17):**
+  - *Damage model:* a weapon adds a **flat `damageBonus`** to the attack's base `damage` (additive, separate from the leveling `atk` stat — no double-counting). Accepted that a flat bonus fades as `atk` grows late-game; revisit with a multiplier only if play-testing demands it.
+  - *Modifier surface:* damage / reach (`radiusBonus`) / swing-weight (`staminaDelta`) only — weapons **do not touch `hitChance`** (reliability is the attack's identity).
+  - *Starting kit:* the player **starts unarmed**. The empty slot is `undefined`, and `applyWeapon(spec, undefined)` returns the attack unchanged — so there is no starter weapon in the catalogue; the first pickup is the first weapon.
