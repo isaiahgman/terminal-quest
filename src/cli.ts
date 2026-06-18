@@ -12,7 +12,7 @@ import { type SwarmKind, createEnemy } from './game/enemy.js';
 import { createEnemyAi } from './game/entities.js';
 import { generateWorld } from './game/world/generate.js';
 import { Rng } from './game/rng.js';
-import { pickSpawn } from './game/spawn.js';
+import { pickSpawn, placeBosses } from './game/spawn.js';
 import { runLoop } from './game/loop.js';
 import { Input } from './input/input.js';
 import {
@@ -60,6 +60,22 @@ function spawnEnemies(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
     });
   }
   return enemies;
+}
+
+/**
+ * Place the boss roster (TQ-011) into the live enemy set. Each boss is a tough
+ * {@link Enemy} (`kind: 'boss'`), so it rides in `enemies[]` as a {@link LiveEnemy}
+ * and reuses the existing movement/combat/contact/XP/render paths — the only
+ * boss-specific logic (defeat-counting, the victory flip, the signature) lives in
+ * the sim. Deterministic from the injected {@link Rng} (seeded off the world
+ * seed), like {@link spawnEnemies}; bosses are spaced far from the player and each
+ * other by {@link placeBosses}, not scattered as a swarm.
+ */
+function spawnBosses(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
+  return placeBosses(world, player, rng).map((boss) => ({
+    enemy: boss,
+    ai: createEnemyAi(),
+  }));
 }
 
 /** The player's level, defaulting to 1 for pre-progression states. */
@@ -163,10 +179,17 @@ async function main(): Promise<void> {
   } else {
     player = createPlayer(pickSpawn(world, setupRng));
   }
+  // Bosses are the win condition (prd §7/F7): place the full roster as live
+  // enemies alongside the swarm so they move/fight/render via the shared paths
+  // and the run is winnable. Like the swarm, they respawn from the seed each load
+  // (enemies aren't persisted), so the roster is always present on a resume too.
   const state: GameState = {
     world,
     player,
-    enemies: spawnEnemies(world, player.pos, setupRng),
+    enemies: [
+      ...spawnEnemies(world, player.pos, setupRng),
+      ...spawnBosses(world, player.pos, setupRng),
+    ],
     tooTired: false,
     tick: save?.tick ?? 0,
   };
