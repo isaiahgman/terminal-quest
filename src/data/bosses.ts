@@ -103,6 +103,16 @@ const roster: BossSpec[] = [
 export const BOSS_ROSTER: readonly BossSpec[] = Object.freeze(roster);
 
 /**
+ * The win target: defeat this many bosses to win (prd §7/F7). The single source
+ * of truth for both the victory check (`update.ts`) and the HUD denominator
+ * (`render/hud.ts` re-exports it) — so "n/total" on screen and the victory
+ * trigger can never disagree. Equal to the roster length, so it grows from 2 to
+ * the design target of 10 as bosses are appended — pure data, no code change
+ * (the agreed TQ-011 win-target = roster-length decision).
+ */
+export const TOTAL_BOSSES = BOSS_ROSTER.length;
+
+/**
  * Build a live {@link Boss} of `spec` at `pos`. `hp` starts at `maxHp`; the
  * position is copied so the caller's `Vec2` is never aliased in (mirrors
  * {@link createEnemy}).

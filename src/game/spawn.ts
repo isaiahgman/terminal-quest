@@ -48,9 +48,10 @@ export const BOSS_MIN_SEPARATION = 15;
  * used — but every tier still excludes tiles already taken, so two bosses are
  * **never** placed on the same cell (no overlapping glyphs / 2-for-1 splash).
  * If no distinct tile remains, the world is too cramped to host the rest of the
- * roster and placement stops there rather than stacking; the caller records how
- * many actually landed as `bossesTotal`, so victory stays reachable (you win by
- * clearing the bosses that exist). Returns the placed bosses in roster order.
+ * roster and placement stops there rather than stacking. On a real (large) world
+ * every roster boss lands, so kills can reach `TOTAL_BOSSES` and the run is
+ * winnable; the cramped-world shortfall is a degenerate edge, not the live game.
+ * Returns the placed bosses in roster order for the caller to add to `enemies[]`.
  */
 export function placeBosses(world: World, player: Vec2, rng: Rng): Boss[] {
   const walkable: Vec2[] = [];

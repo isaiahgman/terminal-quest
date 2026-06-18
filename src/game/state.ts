@@ -70,22 +70,24 @@ export interface GameState {
    */
   enemies?: readonly LiveEnemy[];
   /**
+   * Bosses the player has defeated, of the `TOTAL_BOSSES` (the roster length,
+   * `data/bosses.ts`) that are the win condition (prd §7/F7). The HUD (TQ-008)
+   * renders `bossesDefeated / TOTAL_BOSSES`; {@link update} increments this when a
+   * boss is slain and flips {@link GameState.status} to `'victory'` once it hits
+   * `TOTAL_BOSSES`. Optional during incremental wiring — a state with no bosses
+   * omits it and `update` treats it as 0, so no bosses ⇒ no victory.
+   */
+  bossesDefeated?: number;
+  /**
    * Set when the player tried to attack this tick but lacked the stamina — the
    * data behind the brief "too tired" cue. The HUD surfaces it (TQ-008); for now
    * it makes the stamina gate observable and testable.
    */
   tooTired: boolean;
   /**
-   * Bosses defeated so far and the total placed in the world (TQ-011). The HUD
-   * (TQ-008) renders these as `n/total`; victory fires when they are equal.
-   * Both optional during incremental wiring — a state with no bosses omits them
-   * and {@link update} treats them as 0, so no bosses ⇒ no victory.
-   */
-  bossesDefeated?: number;
-  bossesTotal?: number;
-  /**
-   * Run status (TQ-011). Optional/defaulted to `'playing'` like the counters
-   * above; flips to `'victory'` once every placed boss is defeated.
+   * Run status (TQ-011). Optional/defaulted to `'playing'`; flips to `'victory'`
+   * once `bossesDefeated` reaches `TOTAL_BOSSES`. The visible win screen + loop
+   * halt land in a later TQ-011 PR.
    */
   status?: GameStatus;
   /** Monotonic simulation tick counter (set by the loop in TQ-002). */

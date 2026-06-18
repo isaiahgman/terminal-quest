@@ -14,7 +14,7 @@ import { contactDamage, stepEnemy } from './entities.js';
 import { createProgression, gainXp, xpForKill } from './progression.js';
 import { ATTACKS, type AttackId } from '../data/attacks.js';
 import type { Enemy } from './enemy.js';
-import type { Boss } from '../data/bosses.js';
+import { type Boss, TOTAL_BOSSES } from '../data/bosses.js';
 
 /** A player-issued action for one tick. (More variants land in later PRs.) */
 export interface MoveIntent {
@@ -112,11 +112,22 @@ export function update(
 
   let { x, y } = state.player.pos;
   if (lastMove !== undefined) {
-    const nx = x + lastMove.dx;
-    const ny = y + lastMove.dy;
-    if (isWalkable(state.world, nx, ny)) {
-      x = nx;
-      y = ny;
+    const { dx, dy } = lastMove;
+    if (isWalkable(state.world, x + dx, y + dy)) {
+      // Target tile (orthogonal or diagonal) is open — take it.
+      x += dx;
+      y += dy;
+    } else if (dx !== 0 && dy !== 0) {
+      // Diagonal blocked: slide along the wall by trying each axis alone, so a
+      // blocked corner doesn't make the player stick (TQ-017). Prefer the
+      // horizontal step, then the vertical. At an outer corner — where only the
+      // diagonal tile is a wall — both orthogonals are open and the horizontal
+      // wins: arbitrary but deterministic.
+      if (isWalkable(state.world, x + dx, y)) {
+        x += dx;
+      } else if (isWalkable(state.world, x, y + dy)) {
+        y += dy;
+      }
     }
   }
 
@@ -172,15 +183,15 @@ export function update(
         progress: gainXp(player.progress ?? createProgression(), awarded),
       };
 
-      // Bosses are slain through the same path as any enemy; count the ones
-      // that fell this tick and declare victory once the whole placed roster is
-      // down (TQ-011). `bossesTotal` is the denominator the HUD also reads; a
-      // state with no bosses leaves it 0, so victory never spuriously fires.
+      // Bosses are slain through the same path as a normal enemy; count the
+      // ones that fell this tick and declare victory once `TOTAL_BOSSES` (the
+      // roster length — the same denominator the HUD shows) are down (TQ-011).
+      // Gated on a boss actually dying this tick, so a no-boss game never wins;
+      // the `> 0` guard keeps an empty roster from auto-winning at 0/0.
       const slainBosses = slain.filter(({ enemy }) => isBoss(enemy)).length;
       if (slainBosses > 0) {
         bossesDefeated += slainBosses;
-        const bossesTotal = state.bossesTotal ?? 0;
-        if (bossesTotal > 0 && bossesDefeated >= bossesTotal) {
+        if (TOTAL_BOSSES > 0 && bossesDefeated >= TOTAL_BOSSES) {
           status = 'victory';
         }
       }

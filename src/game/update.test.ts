@@ -12,7 +12,7 @@ import { createEnemy, type SwarmKind } from './enemy.js';
 import { createEnemyAi } from './entities.js';
 import { createProgression, xpForKill, xpToNext } from './progression.js';
 import type { RngFn } from './combat.js';
-import { createBoss, type BossSpec } from '../data/bosses.js';
+import { createBoss, type BossSpec, TOTAL_BOSSES } from '../data/bosses.js';
 
 /** One tick in seconds — the unit `update` advances the sim by. */
 const TICK = SIM_DT_SECONDS;
@@ -89,15 +89,17 @@ describe('update — movement', () => {
     expect(next.player.pos).toEqual({ x: 2, y: 1 });
   });
 
-  it('blocks movement into a wall', () => {
-    // up-left from center lands on the (0,0) corner wall → blocked
+  it('blocks an orthogonal move into a wall', () => {
+    // From the top of the plus (1,0), a leftward step targets the (0,0) corner
+    // wall. It is orthogonal — no diagonal slide applies — so the player stays.
+    // (A blocked *diagonal* slides instead; see the wall-slide suite below.)
     const next = update(
-      makeState(),
-      [{ type: 'move', dx: -1, dy: -1 }],
+      makeState({ player: createPlayer({ x: 1, y: 0 }) }),
+      [{ type: 'move', dx: -1, dy: 0 }],
       TICK,
       noRng,
     );
-    expect(next.player.pos).toEqual({ x: 1, y: 1 });
+    expect(next.player.pos).toEqual({ x: 1, y: 0 });
   });
 
   it('increments the tick every call', () => {
@@ -182,6 +184,61 @@ describe('update — movement', () => {
         noRng,
       ).tick,
     ).toBe(1);
+  });
+});
+
+describe('update — diagonal wall-slide (TQ-017)', () => {
+  // A compact 3x3 world: '#' = wall, '.' = floor. The player starts at the
+  // centre (1,1) and pushes up-right {dx:1, dy:-1}, whose diagonal target is the
+  // top-right corner (2,0). Each case walls a different combination so the
+  // per-axis slide is exercised in isolation.
+  const world = (rows: [string, string, string]): World => ({
+    width: 3,
+    height: 3,
+    tiles: rows.map((row) =>
+      [...row].map((c): Tile => (c === '#' ? 'wall' : 'floor')),
+    ),
+    seed: 0,
+  });
+  const pushUpRight = (rows: [string, string, string]): GameState =>
+    update(
+      makeState({ world: world(rows), player: createPlayer({ x: 1, y: 1 }) }),
+      [{ type: 'move', dx: 1, dy: -1 }],
+      TICK,
+      noRng,
+    );
+
+  it('slides horizontally when the diagonal and the vertical are blocked', () => {
+    // corner (2,0) and the tile above (1,0) are walls; the side (2,1) is open.
+    expect(pushUpRight(['.##', '...', '...']).player.pos).toEqual({
+      x: 2,
+      y: 1,
+    });
+  });
+
+  it('slides vertically when the diagonal and the horizontal are blocked', () => {
+    // corner (2,0) and the side (2,1) are walls; the tile above (1,0) is open.
+    expect(pushUpRight(['..#', '..#', '...']).player.pos).toEqual({
+      x: 1,
+      y: 0,
+    });
+  });
+
+  it('stays put when the diagonal and both orthogonals are blocked', () => {
+    // corner (2,0), above (1,0), and side (2,1) all walls → nowhere to slide.
+    expect(pushUpRight(['.##', '..#', '...']).player.pos).toEqual({
+      x: 1,
+      y: 1,
+    });
+  });
+
+  it('prefers the horizontal at an outer corner where both orthogonals are open', () => {
+    // only the diagonal corner (2,0) is a wall; (2,1) and (1,0) are both open —
+    // the deterministic tie-break takes the horizontal step.
+    expect(pushUpRight(['..#', '...', '...']).player.pos).toEqual({
+      x: 2,
+      y: 1,
+    });
   });
 });
 
@@ -523,13 +580,13 @@ describe('update — bosses & victory', () => {
     return s;
   }
 
-  it('counts a boss kill and declares victory when the whole roster is down', () => {
+  it('a boss killed by an attack increments the count but does not yet win', () => {
+    expect(TOTAL_BOSSES).toBeGreaterThan(1); // the "not yet" half assumes >1 boss
     const state: GameState = {
       world: openWorld(10, 10),
       player: createPlayer({ x: 5, y: 5 }),
       enemies: [liveBoss(wall, 6, 5, 1)],
       bossesDefeated: 0,
-      bossesTotal: 1,
       tooTired: false,
       tick: 0,
     };
@@ -543,28 +600,29 @@ describe('update — bosses & victory', () => {
 
     expect(next.enemies).toHaveLength(0);
     expect(next.bossesDefeated).toBe(1);
-    expect(next.status).toBe('victory');
+    expect(next.status).toBe('playing'); // 1 < TOTAL_BOSSES
   });
 
-  it('increments the count but stays playing while bosses remain', () => {
+  it('declares victory once the whole roster (TOTAL_BOSSES) is down', () => {
+    // Pre-slain bosses, one per roster slot, all culled this tick → the count
+    // reaches TOTAL_BOSSES and the run flips to victory. Generic over the roster
+    // size so growing it to 10 keeps the test honest.
+    const enemies = Array.from({ length: TOTAL_BOSSES }, (_, i) =>
+      liveBoss(wall, i, 0, 0),
+    );
     const state: GameState = {
-      world: openWorld(10, 10),
-      player: createPlayer({ x: 5, y: 5 }),
-      enemies: [liveBoss(wall, 6, 5, 1)],
+      world: openWorld(Math.max(TOTAL_BOSSES, 2) + 1, 2),
+      player: createPlayer({ x: 0, y: 1 }),
+      enemies,
       bossesDefeated: 0,
-      bossesTotal: 2,
       tooTired: false,
       tick: 0,
     };
-    const next = update(
-      state,
-      [{ type: 'attack', attackId: 'quick-jab' }],
-      TICK,
-      scriptedRng([0]),
-    );
+    const next = update(state, [], TICK, noRng);
 
-    expect(next.bossesDefeated).toBe(1);
-    expect(next.status).toBe('playing');
+    expect(next.enemies).toHaveLength(0);
+    expect(next.bossesDefeated).toBe(TOTAL_BOSSES);
+    expect(next.status).toBe('victory');
   });
 
   it('never declares victory in a state with no bosses', () => {
@@ -575,6 +633,7 @@ describe('update — bosses & victory', () => {
   });
 
   it('counts only the bosses among a mixed swarm+boss wipe in one tick', () => {
+    expect(TOTAL_BOSSES).toBeGreaterThan(1); // so one boss down ⇒ not yet victory
     // A boss and a grunt both fall this tick; only the boss must increment the
     // count — guards the `isBoss` filter (counting all slain would read 2).
     const state: GameState = {
@@ -582,7 +641,6 @@ describe('update — bosses & victory', () => {
       player: createPlayer({ x: 5, y: 5 }),
       enemies: [liveBoss(wall, 2, 2, 0), deadEnemy('grunt', 8, 8)],
       bossesDefeated: 0,
-      bossesTotal: 2,
       tooTired: false,
       tick: 0,
     };
@@ -598,15 +656,14 @@ describe('update — bosses & victory', () => {
       world: openWorld(10, 10),
       player: createPlayer({ x: 5, y: 5 }),
       enemies: [],
-      bossesDefeated: 1,
-      bossesTotal: 1,
+      bossesDefeated: TOTAL_BOSSES,
       status: 'victory',
       tooTired: false,
       tick: 0,
     };
     const next = update(state, [], TICK, noRng);
     expect(next.status).toBe('victory');
-    expect(next.bossesDefeated).toBe(1);
+    expect(next.bossesDefeated).toBe(TOTAL_BOSSES);
   });
 
   it('enrage: a low-health boss advances faster than a full-health one', () => {
