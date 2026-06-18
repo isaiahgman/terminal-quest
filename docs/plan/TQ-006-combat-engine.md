@@ -1,5 +1,5 @@
 # TQ-006 — Combat engine: radius + stamina + hit-chance (pure)
-Status: merged (#10) · Depends on: TQ-005 · Scope: ~M · Touches: src/game/combat.ts, src/game/combat.test.ts
+Depends on: TQ-005 · Scope: ~M · Touches: src/game/combat.ts, src/game/combat.test.ts
 
 ## Context
 The signature mechanic, as pure tested logic ([prd §6](../prd.md#6-combat--the-signature-system), [tdd §6](../tdd.md#6-combat-model)). This is the "attack complexity" ticket Isaiah asked to capture separately.

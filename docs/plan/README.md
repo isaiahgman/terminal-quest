@@ -4,6 +4,8 @@ The [PRD](../prd.md) and [TDD](../tdd.md) decomposed into **shippable slices** (
 
 > **Two namespaces — don't conflate them.** `TQ-NNN` is a *plan artifact* (this folder). `#N` is a *GitHub pull request*. They are different counters: one artifact normally ships as **several** small PRs (e.g. `TQ-004` → PRs `#12`, `#13`, `#25`), so `TQ-004` ≠ `#4`.
 
+**Where we are:** [`STATUS.md`](STATUS.md) — a generated table of which tickets are merged / in progress / todo, derived from PRs (`node scripts/status.mjs`). The phase tables below are the *plan*; STATUS.md is the *state*.
+
 Strategy: **prove the core dopamine loop before adding content.** Phases 1–2 deliver a *playable, addictive feel*; phases 3–4 add the full vision (10 bosses, base, dungeons, juice).
 
 ## Phase 1 — Engine & rendering foundation
@@ -61,4 +63,4 @@ Surfaced by play-testing the merged movement build. All three touch the input la
 - **`TQ-NNN` = one plan artifact = one branch family** (`tq-000-scaffold`). It does **not** map 1:1 to a GitHub PR — an artifact normally ships as several small PRs (`#N`), each tiny and atomic. Reference plan work as `TQ-NNN`; reference shipped/open code as `#N`.
 - An artifact is **ready** only when its Acceptance boxes are objectively checkable.
 - Keep the **simulation pure** and the **renderer read-only** — never let game math leak into render/input. This is the bet that keeps the whole thing testable and lets us add juice safely later.
-- Update each artifact's `Status` (`ready → in progress → merged`) as it moves.
+- **Status is derived, never hand-written.** Artifacts carry no `Status:` line. Ticket state lives in one generated file — [`STATUS.md`](STATUS.md) — computed from PRs by `node scripts/status.mjs`. End every PR title with a `(TQ-NNN)` tag so its ticket's state updates automatically; a bare mention elsewhere in the title is prose, not an implementation.

@@ -1,5 +1,5 @@
 # TQ-005 — Enemies that hunt you on a clock
-Status: in progress · Depends on: TQ-004 · Scope: ~M · Touches: src/game/enemy.ts, src/game/entities.ts, src/game/update.ts
+Depends on: TQ-004 · Scope: ~M · Touches: src/game/enemy.ts, src/game/entities.ts, src/game/update.ts
 
 ## Context
 The pressure that makes the game a game ([prd §6](../prd.md#6-combat--the-signature-system)): enemies advance whether or not you move — "stand still and you die."

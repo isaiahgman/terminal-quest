@@ -1,5 +1,5 @@
 # TQ-008 — HUD: health / stamina / level
-Status: ready · Depends on: TQ-007 · Scope: ~S · Touches: src/render/hud.ts, src/render/renderer.ts
+Depends on: TQ-007 · Scope: ~S · Touches: src/render/hud.ts, src/render/renderer.ts
 
 ## Context
 The player can't manage stamina/health they can't see ([prd F1/F3](../prd.md#10-features)). Makes the combat loop legible.

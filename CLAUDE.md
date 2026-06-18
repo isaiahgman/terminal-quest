@@ -35,7 +35,7 @@ Keep combat/progression math in pure, tested modules (`combat.ts`, `progression.
 3. **Breakdown / context-collection stage** — before coding: read the artifact + its `Depends on` PRs + the PRD/TDD sections it links + the existing code it touches. Restate the goal, list files to change, confirm the Acceptance boxes are objectively checkable, surface unknowns.
 4. **Implement** to the acceptance criteria; run `npm run check` (typecheck + lint + test) — must be green.
 5. **Commit** on the branch (co-author trailer) and push the **branch** (never `main`).
-6. **Open a PR** via the GitHub MCP. PR body format is exactly:
+6. **Open a PR** via the GitHub MCP. **End the title with a `(TQ-NNN)` tag** (e.g. `feat(combat): named attack types (TQ-007)`) — this is how ticket status is derived; an untagged title leaves the ticket invisible to the tracker. PR body format is exactly:
    ```
    ## Summary
    <what & why, 1–3 sentences; link the planning artifact>
@@ -43,7 +43,7 @@ Keep combat/progression math in pure, tested modules (`combat.ts`, `progression.
    - <change 1>
    - <change 2>
    ```
-7. Update the artifact's `Status` (`ready → in progress → merged`).
+7. **Don't hand-edit status.** It's derived from PRs — run `node scripts/status.mjs --write` to regenerate `docs/plan/STATUS.md`. Artifacts carry no `Status:` line.
 
 > Skills (global): **`/status`** = where we are + the next ticket (dependency-aware, read-only). **`/pick-up TQ-NNN`** = the alignment phase — reads PRD+TDD+artifact, makes a plan, talks it through; stops there (no code). Implementation (steps 1, 3–7 above) is a separate step after the plan is agreed.
 
@@ -69,8 +69,4 @@ The **pure logic modules** in `src/game/` (e.g. `rng.ts`, `world/generate.ts`, `
 - Save the **world seed**, not the tile array (world is deterministic from seed).
 
 ## Current status
-**Canonical status lives in the artifacts** — read each `TQ-NNN` `Status:` line in `docs/plan/` (and `docs/plan/README.md` for the phased order). Don't hand-maintain a per-PR list here; it drifts every batch. The summary below is orientation only.
-
-- **Playable today:** tile world + following camera, procedural world-gen wired into the running game (TQ-004), responsive held-direction movement (TQ-016).
-- **Pure modules — *not yet wired* into `update`/`state`/render:** enemy AI (`enemy.ts`, TQ-005), combat (`combat.ts`, TQ-006), attack types (TQ-007), leveling (`progression.ts`, TQ-009). They pass their unit tests but don't yet affect the running game — wiring them into the loop is the next integration work.
-- **Next:** the remaining MVP-cut artifacts still marked `ready` in `docs/plan/` (e.g. TQ-008 HUD, TQ-017 diagonal movement) plus the integration above.
+**Status is derived, not hand-maintained here.** The single source of truth is [`docs/plan/STATUS.md`](docs/plan/STATUS.md), generated from PRs by `node scripts/status.mjs` (`--write` to update the file). It drove every batch's drift when kept by hand — so we don't anymore. For the phased order and dependencies, see [`docs/plan/README.md`](docs/plan/README.md).

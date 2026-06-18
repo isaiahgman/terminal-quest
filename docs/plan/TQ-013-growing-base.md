@@ -1,5 +1,5 @@
 # TQ-013 — Growing home base (persistent meta)
-Status: ready · Depends on: TQ-012 · Scope: ~M · Touches: src/game/base.ts, src/game/state.ts, src/render/renderer.ts, src/save/save.ts
+Depends on: TQ-012 · Scope: ~M · Touches: src/game/base.ts, src/game/state.ts, src/render/renderer.ts, src/save/save.ts
 
 ## Context
 The meta-progression anchor ([prd §7](../prd.md#7-world--progression)): a home that **grows** as you progress and persists across runs/sessions.

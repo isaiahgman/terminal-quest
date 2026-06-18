@@ -1,5 +1,5 @@
 # TQ-018 — Visual identity: palette, backgrounds, Unicode tileset
-Status: in progress · Depends on: none · Scope: ~M · Touches: src/render/sprites.ts (+ new src/render/sprites.test.ts), src/render/renderer.ts
+Depends on: none · Scope: ~M · Touches: src/render/sprites.ts (+ new src/render/sprites.test.ts), src/render/renderer.ts
 
 ## Context
 Today the world reads as flat ASCII — `·` floor, `#` wall, `@` player, one foreground colour each ([sprites.ts](../../src/render/sprites.ts)). Beta feedback (2026-06-16): the map and movement work, but it's visually plain and hard to read at a glance. The renderer already composites per-cell `attr` through a terminal-kit `ScreenBuffer` with synchronized output ([renderer.ts](../../src/render/renderer.ts)), and every on-grid thing funnels through one function (`glyphForTile`). That's the right seam to introduce a deliberate **visual identity** — a colour palette, per-cell background colours, and a Unicode tileset — with localized, render-only changes.
