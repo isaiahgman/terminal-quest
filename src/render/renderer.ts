@@ -94,17 +94,24 @@ export class Renderer {
       );
     }
 
-    this.screen.put(
-      {
-        x: state.player.pos.x - cam.x,
-        y: state.player.pos.y - cam.y,
-        attr: cellAttr(PLAYER_GLYPH, true),
-        wrap: false,
-        dx: 1,
-        dy: 0,
-      },
-      PLAYER_GLYPH.char,
-    );
+    // Cull the player against the play area too (symmetry with enemies above),
+    // so a degenerate viewport — e.g. `playH === 0` on a terminal too short for
+    // the world — never paints the player glyph into the HUD band.
+    const px = state.player.pos.x - cam.x;
+    const py = state.player.pos.y - cam.y;
+    if (px >= 0 && py >= 0 && px < width && py < playH) {
+      this.screen.put(
+        {
+          x: px,
+          y: py,
+          attr: cellAttr(PLAYER_GLYPH, true),
+          wrap: false,
+          dx: 1,
+          dy: 0,
+        },
+        PLAYER_GLYPH.char,
+      );
+    }
 
     // The HUD owns the reserved band below the world viewport.
     drawHud(this.screen, state, playH, width);

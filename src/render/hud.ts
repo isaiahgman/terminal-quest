@@ -41,14 +41,17 @@ const SP_COLOR = 'brightGreen';
 const EMPTY_COLOR = 'gray';
 const TEXT_COLOR = 'white';
 const TIRED_COLOR = 'brightYellow';
+/** Blank padding cells carry no visible glyph, so their foreground is moot — a
+ *  neutral name, kept decoupled from the bar palette. */
+const PAD_COLOR = 'gray';
 
 /**
  * Filled-cell count for a bar showing `value` out of `max` across `width` cells.
  * Pure and total: non-finite inputs or a non-positive `width`/`max` yield 0
  * (never `NaN`); the ratio is clamped to `[0, 1]`; a non-empty value always
- * shows at least one cell (a living sliver never reads as empty); and a value
- * short of `max` never fills the final cell (so "not quite full" stays visually
- * distinct from "full").
+ * shows at least one cell (a living sliver never reads as empty); and — because
+ * the count is floored — a value short of `max` never fills the final cell, so
+ * "not quite full" stays visually distinct from "full".
  */
 export function barFill(value: number, max: number, width: number): number {
   if (
@@ -62,7 +65,6 @@ export function barFill(value: number, max: number, width: number): number {
   const ratio = Math.max(0, Math.min(1, value / max));
   let filled = Math.floor(ratio * width);
   if (filled === 0 && value > 0) filled = 1;
-  if (filled === width && ratio < 1) filled = width - 1;
   return filled;
 }
 
@@ -128,7 +130,7 @@ function layoutRow(
     x += text.length;
   }
   if (x < width) {
-    putSegment(screen, x, y, ' '.repeat(width - x), EMPTY_COLOR, false);
+    putSegment(screen, x, y, ' '.repeat(width - x), PAD_COLOR, false);
   }
 }
 
@@ -145,11 +147,6 @@ function barSegments(
   ];
 }
 
-/** Whole numbers for the readouts — stamina regen is fractional per tick. */
-function readout(n: number): number {
-  return Math.round(n);
-}
-
 /**
  * Draw the HUD into the `HUD_ROWS`-tall band whose first row is `top`, spanning
  * `width` columns. Read-only: derives everything from `state` and mutates
@@ -164,22 +161,25 @@ export function drawHud(
 ): void {
   const { player, tooTired } = state;
   const progress = player.progress ?? createProgression();
+  // Floor each current value once and feed the SAME number to both the bar and
+  // the numeric readout, so the two can never disagree — e.g. a rounded "10/10"
+  // sitting beside a bar that isn't full. hp is integer; stamina accrues
+  // fractionally per tick (regen), which is the case this guards.
+  const hp = Math.floor(player.hp);
+  const stamina = Math.floor(player.stamina);
 
   // Row 0 — health.
   layoutRow(screen, top, width, [
     { text: 'HP ', color: LABEL_COLOR, bold: true },
-    ...barSegments(player.hp, progress.maxHp, HP_COLOR),
-    { text: ` ${readout(player.hp)}/${progress.maxHp}`, color: TEXT_COLOR },
+    ...barSegments(hp, progress.maxHp, HP_COLOR),
+    { text: ` ${hp}/${progress.maxHp}`, color: TEXT_COLOR },
   ]);
 
   // Row 1 — stamina, with the "too tired" cue when an attack was just blocked.
   const staminaRow: Segment[] = [
     { text: 'SP ', color: LABEL_COLOR, bold: true },
-    ...barSegments(player.stamina, progress.maxStamina, SP_COLOR),
-    {
-      text: ` ${readout(player.stamina)}/${progress.maxStamina}`,
-      color: TEXT_COLOR,
-    },
+    ...barSegments(stamina, progress.maxStamina, SP_COLOR),
+    { text: ` ${stamina}/${progress.maxStamina}`, color: TEXT_COLOR },
   ];
   if (tooTired) {
     staminaRow.push({ text: '  TIRED', color: TIRED_COLOR, bold: true });

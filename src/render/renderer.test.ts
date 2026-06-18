@@ -267,4 +267,30 @@ describe('Renderer', () => {
     const hudTop = hudPuts.filter((p) => p.y === playH);
     expect(hudTop[0]).toMatchObject({ x: 0, y: playH, char: 'HP ' });
   });
+
+  it('suppresses the world (and culls the player) when the terminal is too short', async () => {
+    const { Renderer } = await import('./renderer.js');
+    const { PLAYER_GLYPH, glyphForTile } = await import('./sprites.js');
+
+    // A terminal shorter than the reserved HUD band: playH = max(0, 2 - 3) = 0.
+    // The deliberate clamp must hold — no world cells, no player, no crash.
+    const shortTerm = {
+      width: 8,
+      height: 2,
+    } as unknown as ConstructorParameters<typeof Renderer>[0];
+    const renderer = new Renderer(shortTerm);
+
+    expect(() => {
+      renderer.render(makeBigState());
+    }).not.toThrow();
+
+    const chars = new Set(recordedPuts(renderer).map((p) => p.char));
+    // No tile glyphs and no player — the world pass never ran and the player was
+    // culled against playH (terminal-kit clips the HUD's overflowing rows).
+    expect(chars.has(glyphForTile('wall').char)).toBe(false);
+    expect(chars.has(glyphForTile('floor').char)).toBe(false);
+    expect(chars.has(PLAYER_GLYPH.char)).toBe(false);
+    // The HUD still drew (its rows are clipped by the buffer, not skipped).
+    expect(recordedPuts(renderer).length).toBeGreaterThan(0);
+  });
 });

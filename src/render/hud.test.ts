@@ -161,36 +161,57 @@ describe('drawHud', () => {
     expect(hpRow).toContain('░'.repeat(2));
   });
 
-  it('paints every cell of its reserved band each frame and nothing below it', () => {
+  it('paints every cell of its reserved band each frame (no stale bleed-through)', () => {
     const screen = new FakeScreen();
     const top = 5;
     drawHud(screen, makeState(), top, WIDTH);
 
-    // Exactly HUD_ROWS rows, starting at `top`, each fully covering the width.
+    // Exactly HUD_ROWS rows, starting at `top`.
+    expect(HUD_ROWS).toBe(3);
     const rows = new Set(screen.puts.map((p) => p.y));
     expect([...rows].sort((a, b) => a - b)).toEqual([5, 6, 7]);
-    expect(HUD_ROWS).toBe(3);
+
+    // Every cell in [0, WIDTH) of every HUD row must be written by *some* put —
+    // this is what `layoutRow`'s trailing space-padding guarantees, and what
+    // stops stale world tiles bleeding through under delta draws. Build the
+    // coverage from the recorded puts directly (not `rowText`, which always
+    // returns WIDTH chars and so could never catch a gap).
     for (let y = top; y < top + HUD_ROWS; y++) {
-      expect(rowText(screen, y, WIDTH)).toHaveLength(WIDTH);
+      const covered = new Array<boolean>(WIDTH).fill(false);
+      for (const p of screen.puts.filter((put) => put.y === y)) {
+        for (let i = 0; i < p.text.length; i++) {
+          const x = p.x + i;
+          if (x >= 0 && x < WIDTH) covered[x] = true;
+        }
+      }
+      expect(covered.every(Boolean)).toBe(true);
     }
   });
 
-  it('surfaces the "too tired" cue only when the attack was blocked', () => {
+  it('surfaces the "too tired" cue after the stamina readout, only when blocked', () => {
     const calm = new FakeScreen();
     drawHud(calm, makeState({ tooTired: false }), 0, WIDTH);
     expect(rowText(calm, 1, WIDTH)).not.toContain('TIRED');
 
     const tired = new FakeScreen();
     drawHud(tired, makeState({ tooTired: true }), 0, WIDTH);
-    expect(rowText(tired, 1, WIDTH)).toContain('TIRED');
+    const row = rowText(tired, 1, WIDTH);
+    expect(row).toContain('TIRED');
+    // It trails the readout — a regression that prepended it over the SP
+    // label/bar would still contain "TIRED" but fail this ordering.
+    expect(row.indexOf('TIRED')).toBeGreaterThan(row.indexOf('6/10'));
   });
 
-  it('rounds the fractional stamina readout to a whole number', () => {
+  it('keeps the readout consistent with the bar — never rounds up to a false full', () => {
     const screen = new FakeScreen();
     const state = makeState();
-    state.player.stamina = 6.4; // regen accrues fractional stamina per tick
+    state.player.stamina = 9.6; // fractional regen; must not read as "10/10"
     drawHud(screen, state, 0, WIDTH);
-    expect(rowText(screen, 1, WIDTH)).toContain('6/10');
+    const row = rowText(screen, 1, WIDTH);
+    expect(row).toContain('9/10');
+    expect(row).not.toContain('10/10');
+    // And the bar agrees: not full (no 12th filled cell) since stamina < max.
+    expect(row).not.toContain('█'.repeat(12));
   });
 
   it('defaults missing progress and bossesDefeated (incremental wiring)', () => {
