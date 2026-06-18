@@ -5,7 +5,7 @@ Single source of truth for ticket state. **Do not edit by hand** — regenerate 
 `node scripts/status.mjs --write`. State is computed from merged/open PRs (matched to
 tickets by the `TQ-NNN` tag in each PR title), never stored manually.
 
-**12 merged · 0 in progress · 8 todo**
+**17 merged · 0 in progress · 3 todo**
 
 | TQ | Title | State | PRs |
 |----|-------|-------|-----|
@@ -17,15 +17,15 @@ tickets by the `TQ-NNN` tag in each PR title), never stored manually.
 | 005 | Enemies that hunt you on a clock | merged | #9, #29 |
 | 006 | Combat engine: radius + stamina + hit-chance (pure) | merged | #10 |
 | 007 | Named attack types (risk/reward) wired to input | merged | #35 |
-| 008 | HUD: health / stamina / level | todo | — |
+| 008 | HUD: health / stamina / level | merged | #66 |
 | 009 | Leveling + power curve (pure) | merged | #34 |
-| 010 | Weapons: slot, random drops, equip, damage | todo | — |
-| 011 | Bosses + win condition | todo | — |
-| 012 | Save / autosave | todo | — |
+| 010 | Weapons: slot, random drops, equip, damage | merged | #65 |
+| 011 | Bosses + win condition | merged | #67 |
+| 012 | Save / autosave | merged | #63 |
 | 013 | Growing home base (persistent meta) | todo | — |
 | 014 | High-risk/high-reward dungeons | todo | — |
 | 015 | Juice: hit flashes, damage numbers, screen shake | todo | — |
 | 016 | Responsive held-direction movement (decouple from OS key-repeat) | merged | #32 |
-| 017 | Diagonal (8-direction) movement | todo | — |
+| 017 | Diagonal (8-direction) movement | merged | #64 |
 | 018 | Visual identity: palette, backgrounds, Unicode tileset | merged | #36 |
 | 019 | Real key-release via the kitty keyboard protocol (progressive enhancement) | merged | #37 |
