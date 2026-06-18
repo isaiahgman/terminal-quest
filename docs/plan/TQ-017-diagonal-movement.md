@@ -26,3 +26,4 @@ Merged means: holding a horizontal and a vertical direction at once moves the pl
 ## Notes
 - Diagonal speed: combining to one tile/tick means diagonals cover √2× distance per tick (slightly faster). Acceptable for a swarm dodger; note if it needs normalising later.
 - Depends on TQ-016 strictly — build it first so "which directions are held right now" is already modelled.
+- **Sustained diagonals are tier-dependent.** In the timeout tier the OS auto-repeats only the *most-recently-pressed* key, so a held two-key diagonal collapses to the repeating axis once the other crosses `HELD_WINDOW_MS` (covered by the "expires one axis of a held diagonal" test). Held diagonal movement is robust only in the kitty/release tier, which streams `repeat` for every physically-held key. Inherent to TQ-016's model, not introduced here — flag for the swarm-dodger feel if it bites.
