@@ -2,6 +2,7 @@ import terminalKit from 'terminal-kit';
 import {
   type GameState,
   type LiveEnemy,
+  type Player,
   type Vec2,
   type World,
   createPlayer,
@@ -19,8 +20,17 @@ import {
   type KeyboardHandle,
 } from './input/terminalKeyboard.js';
 import { Renderer, SYNC_OFF } from './render/renderer.js';
+import {
+  playerFromSave,
+  readSave,
+  writeSave,
+  writeSaveSync,
+} from './save/save.js';
 
 const term = terminalKit.terminal;
+
+/** How often the throttled, non-blocking autosave writes the latest state. */
+const AUTOSAVE_INTERVAL_MS = 5000;
 
 /** How many enemies to seed the world with, and the mix of kinds to draw from. */
 const ENEMY_COUNT = 8;
@@ -59,9 +69,16 @@ function spawnEnemies(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
  */
 let shuttingDown = false;
 let keyboard: KeyboardHandle | undefined;
+// The latest state the loop has rendered, captured for autosave. `undefined`
+// until the first frame — a signal during startup has nothing to save yet.
+let latestState: GameState | undefined;
+let autosaveTimer: NodeJS.Timeout | undefined;
 function shutdown(code = 0): void {
   if (shuttingDown) return;
   shuttingDown = true;
+  // Stop interval autosaves before the final write so the two never race; their
+  // unique temp files plus process.exit() below also rule out a late async rename.
+  if (autosaveTimer !== undefined) clearInterval(autosaveTimer);
   // Leave synchronized-output mode (the renderer toggles DEC 2026 per frame); a
   // crash mid-frame would otherwise freeze the display. Guard the write so an
   // already-closed stdout (EPIPE) can't throw on the way out.
@@ -70,6 +87,16 @@ function shutdown(code = 0): void {
   term.hideCursor(false);
   term.fullscreen(false);
   term.styleReset();
+  // Final synchronous save so the latest progress survives quit/SIGINT/crash.
+  // After the terminal is restored, so a failed save can report cleanly; wrapped
+  // so a save error can never block the exit.
+  if (latestState !== undefined) {
+    try {
+      writeSaveSync(latestState);
+    } catch (err: unknown) {
+      console.error('terminal-quest: final save failed', err);
+    }
+  }
   process.exit(code);
 }
 
@@ -103,21 +130,30 @@ async function main(): Promise<void> {
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
   });
 
-  // A fresh world each launch; saving/restoring a chosen seed is TQ-012. The
-  // world is larger than the screen so the camera has to follow the player.
-  const worldSeed = Math.floor(Math.random() * 0x100000000);
-  const world = generateWorld(term.width * 2, term.height * 2, worldSeed);
+  // Resume from a valid save, else start a fresh run (TQ-012). A save stores the
+  // seed + dims (the world is deterministic), so we regenerate the exact same
+  // world from them rather than persisting the tile array. Enemies are not saved:
+  // they respawn from the seed on load — we resume the *feel*, not the swarm.
+  const save = readSave();
+  const worldSeed = save?.world.seed ?? Math.floor(Math.random() * 0x100000000);
+  // A fresh world is larger than the screen so the camera has to follow the
+  // player; a resumed world keeps its saved dims so positions stay valid.
+  const world = save
+    ? generateWorld(save.world.width, save.world.height, worldSeed)
+    : generateWorld(term.width * 2, term.height * 2, worldSeed);
 
   // One RNG seeded off the world seed drives spawn placement; a second drives
   // the live sim (attack rolls) so combat reproduces alongside the world.
   const setupRng = new Rng(worldSeed);
-  const spawn = pickSpawn(world, setupRng);
+  const player: Player = save
+    ? playerFromSave(save)
+    : createPlayer(pickSpawn(world, setupRng));
   const state: GameState = {
     world,
-    player: createPlayer(spawn),
-    enemies: spawnEnemies(world, spawn, setupRng),
+    player,
+    enemies: spawnEnemies(world, player.pos, setupRng),
     tooTired: false,
-    tick: 0,
+    tick: save?.tick ?? 0,
   };
 
   const simRng = new Rng(worldSeed ^ 0x9e3779b9);
@@ -129,10 +165,34 @@ async function main(): Promise<void> {
   // protocol support. Must finish before the loop so input is live frame one.
   keyboard = await startKeyboard(input);
 
+  // Autosave: fire-and-forget async writes that never block the loop on disk I/O.
+  // A failed autosave is logged but non-fatal — the final sync save on exit and
+  // the next interval both get another chance.
+  latestState = state;
+  let lastSavedLevel = state.player.progress?.level ?? 1;
+  const requestSave = (): void => {
+    if (latestState === undefined) return;
+    void writeSave(latestState).catch((err: unknown) => {
+      console.error('terminal-quest: autosave failed', err);
+    });
+  };
+  autosaveTimer = setInterval(requestSave, AUTOSAVE_INTERVAL_MS);
+  autosaveTimer.unref(); // never keep the process alive for an autosave
+
   runLoop(state, {
     drainIntents: () => input.drain(),
     rng: () => simRng.nextFloat(),
-    render: (s) => renderer.render(s),
+    render: (s) => {
+      latestState = s;
+      // Save immediately on a level-up — the one "key event" that exists today
+      // (boss-kill / weapon-equip triggers arrive with TQ-011 / TQ-010).
+      const level = s.player.progress?.level ?? 1;
+      if (level > lastSavedLevel) {
+        lastSavedLevel = level;
+        requestSave();
+      }
+      renderer.render(s);
+    },
     shouldStop: () => input.shouldQuit,
     onStop: () => shutdown(0),
   });
