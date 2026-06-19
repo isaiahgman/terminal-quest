@@ -3,6 +3,21 @@ import { Rng } from './rng.js';
 import { BOSS_ROSTER, type Boss, createBoss } from '../data/bosses.js';
 
 /**
+ * Every walkable (floor) cell in the world, in row-major order — the placement
+ * pool shared by {@link pickSpawn} and {@link placeBosses}. `generateWorld`
+ * guarantees at least one floor tile, so for a generated world this is non-empty.
+ */
+export function walkableTiles(world: World): Vec2[] {
+  const tiles: Vec2[] = [];
+  for (let y = 0; y < world.height; y++) {
+    for (let x = 0; x < world.width; x++) {
+      if (isWalkable(world, x, y)) tiles.push({ x, y });
+    }
+  }
+  return tiles;
+}
+
+/**
  * Pick a walkable spawn tile deterministically. Draws from the injected
  * {@link Rng} (seeded off the world seed) rather than the global rot.js RNG, so
  * the choice reproduces alongside the map — but only at a fixed world size: the
@@ -13,13 +28,7 @@ import { BOSS_ROSTER, type Boss, createBoss } from '../data/bosses.js';
  * `generateWorld` guarantees at least one floor tile, so the list is non-empty.
  */
 export function pickSpawn(world: World, rng: Rng): Vec2 {
-  const walkable: Vec2[] = [];
-  for (let y = 0; y < world.height; y++) {
-    for (let x = 0; x < world.width; x++) {
-      if (isWalkable(world, x, y)) walkable.push({ x, y });
-    }
-  }
-  return rng.pick(walkable);
+  return rng.pick(walkableTiles(world));
 }
 
 /**
@@ -54,12 +63,7 @@ export const BOSS_MIN_SEPARATION = 15;
  * Returns the placed bosses in roster order for the caller to add to `enemies[]`.
  */
 export function placeBosses(world: World, player: Vec2, rng: Rng): Boss[] {
-  const walkable: Vec2[] = [];
-  for (let y = 0; y < world.height; y++) {
-    for (let x = 0; x < world.width; x++) {
-      if (isWalkable(world, x, y)) walkable.push({ x, y });
-    }
-  }
+  const walkable = walkableTiles(world);
   if (walkable.length === 0) return [];
 
   const far = walkable.filter(
@@ -69,8 +73,12 @@ export function placeBosses(world: World, player: Vec2, rng: Rng): Boss[] {
   const placed: Boss[] = [];
   const taken: Vec2[] = [];
   for (const spec of BOSS_ROSTER) {
+    // "Not already placed on this exact cell." (The old form spelled this as
+    // `manhattan(t, p) > 0`, i.e. distance-from-every-taken-tile is non-zero,
+    // which reads like a spacing constraint but is really just a cell-identity
+    // check — so say so directly.)
     const untaken = (t: Vec2): boolean =>
-      taken.every((p) => manhattan(t, p) > 0);
+      !taken.some((p) => p.x === t.x && p.y === t.y);
     // Prefer tiles far from the player AND spaced from placed bosses; fall back
     // to merely-far, then anywhere walkable — but every tier excludes already-
     // taken cells so bosses never stack. (The spaced tier excludes taken tiles
