@@ -104,7 +104,8 @@ export const WEAPON_MIN_PLAYER_DISTANCE = 6;
  * with a free weapon underfoot — the first pickup is something you walk to.
  *
  * Spacing **degrades gracefully**: when no tile is far enough (a small or cramped
- * world) the spacing filter is dropped and any walkable tile is used. Pickups may
+ * world) the spacing filter is dropped and any walkable tile *other than the
+ * player's own* is used — the underfoot invariant holds in every path. Pickups may
  * share a tile with each other or an enemy (a one-slot pickup over a tile is
  * harmless — the latest stepped-onto wins), matching the swarm's loose placement;
  * tighter spacing is a later concern. Returns the placed pickups for the caller
@@ -127,11 +128,18 @@ export function placeWeapons(
   if (walkable.length === 0) return [];
 
   // Prefer tiles away from the player so no weapon is underfoot at spawn; fall
-  // back to anywhere walkable on a world too cramped to honour the spacing.
+  // back to anywhere walkable *except the player's own tile* on a world too
+  // cramped to honour the spacing. The player's tile is always excluded so the
+  // run never opens with a free weapon underfoot — even in the fallback path,
+  // where `update` would otherwise equip a same-tile pickup before the first move.
   const far = walkable.filter(
     (t) => manhattan(t, player) >= WEAPON_MIN_PLAYER_DISTANCE,
   );
-  const pool = far.length > 0 ? far : walkable;
+  const offPlayer = walkable.filter(
+    (t) => t.x !== player.x || t.y !== player.y,
+  );
+  const pool = far.length > 0 ? far : offPlayer;
+  if (pool.length === 0) return [];
 
   const pickups: Pickup[] = [];
   for (let i = 0; i < count; i++) {

@@ -24,7 +24,7 @@ const PALETTE = {
   wall: { char: '▓', color: 'white', bg: 'brightBlack' },
   /** Deliberately the brightest thing on screen, so it is instantly findable. */
   player: { char: '@', color: 'brightYellow', bg: 'black' },
-  /** A weapon lying on the ground (TQ-010) — a bright cyan dagger to walk onto. */
+  /** A weapon lying on the ground (TQ-010) — a bright cyan marker to walk onto. */
   pickup: { char: '↑', color: 'brightCyan', bg: 'black' },
 } as const satisfies Record<string, Glyph>;
 

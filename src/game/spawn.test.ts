@@ -216,4 +216,36 @@ describe('placeWeapons', () => {
       expect(isWalkable(world, p.pos.x, p.pos.y)).toBe(true);
     }
   });
+
+  it('never drops a pickup on the player spawn, even in the cramped fallback', () => {
+    // Same 3×3 all-floor fixture: no tile is far enough, so the fallback path
+    // runs. The "no weapon underfoot" invariant must still hold — across many
+    // seeds, no pickup may share the player's spawn tile (else the run opens
+    // already armed, since `update` equips a same-tile pickup before any move).
+    const F: Tile = 'floor';
+    const tiles: Tile[][] = [
+      [F, F, F],
+      [F, F, F],
+      [F, F, F],
+    ];
+    const world: World = { width: 3, height: 3, tiles, seed: 0 };
+    for (let seed = 0; seed < 100; seed++) {
+      const pickups = placeWeapons(world, player, new Rng(seed), 5);
+      for (const p of pickups) {
+        expect(p.pos).not.toEqual(player);
+      }
+    }
+  });
+
+  it('returns nothing when the only walkable tile is the player spawn', () => {
+    // A lone floor cell that is the player's own tile: excluding it empties the
+    // fallback pool, so no pickup can be placed underfoot rather than dropped on
+    // the player.
+    const tiles: Tile[][] = Array.from({ length: 3 }, (): Tile[] =>
+      Array.from({ length: 3 }, (): Tile => 'wall'),
+    );
+    tiles[0]![0] = 'floor';
+    const world: World = { width: 3, height: 3, tiles, seed: 0 };
+    expect(placeWeapons(world, player, new Rng(1), 5)).toEqual([]);
+  });
 });
