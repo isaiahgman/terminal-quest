@@ -109,32 +109,43 @@ export async function startKeyboard(
   io.stdin.resume();
 
   const { supported: protocolEnabled, leftover } = await probeKittySupport(io);
-  if (protocolEnabled) {
-    io.stdout.write(ENABLE);
-    input.useReleaseEvents();
-  }
 
   const decoder = new KeyDecoder();
   const onData = (chunk: Buffer): void => {
     for (const event of decoder.decode(chunk)) input.apply(event);
   };
-  io.stdin.on('data', onData);
 
-  // Replay any keystrokes that arrived during the probe (after its reply).
-  if (leftover !== '') {
-    for (const event of decoder.decode(leftover)) input.apply(event);
+  // Teardown, defined *before* we enable anything so a failed startup can pop
+  // the protocol too (see the try/catch below). It pops exactly the one entry
+  // we push, so calling it once on the error path can't double-pop.
+  let restored = false;
+  const restore = (): void => {
+    if (restored) return;
+    restored = true;
+    io.stdin.off('data', onData);
+    if (protocolEnabled) io.stdout.write(DISABLE);
+    setRawMode(io.stdin, false);
+    io.stdin.pause();
+  };
+
+  // Everything from the ENABLE write onward must undo itself if it throws: once
+  // the protocol is pushed, a failure here would reject *before* the handle
+  // exists, so the caller's exit path has no `restore()` to call and the
+  // terminal is left in kitty enhanced mode — violating the always-restore rule.
+  try {
+    if (protocolEnabled) {
+      io.stdout.write(ENABLE);
+      input.useReleaseEvents();
+    }
+    io.stdin.on('data', onData);
+    // Replay any keystrokes that arrived during the probe (after its reply).
+    if (leftover !== '') {
+      for (const event of decoder.decode(leftover)) input.apply(event);
+    }
+  } catch (err: unknown) {
+    restore();
+    throw err;
   }
 
-  let restored = false;
-  return {
-    protocolEnabled,
-    restore: () => {
-      if (restored) return;
-      restored = true;
-      io.stdin.off('data', onData);
-      if (protocolEnabled) io.stdout.write(DISABLE);
-      setRawMode(io.stdin, false);
-      io.stdin.pause();
-    },
-  };
+  return { protocolEnabled, restore };
 }
