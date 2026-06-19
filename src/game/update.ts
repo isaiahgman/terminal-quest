@@ -15,6 +15,7 @@ import { createProgression, gainXp, xpForKill } from './progression.js';
 import { ATTACKS, type AttackId } from '../data/attacks.js';
 import type { Enemy } from './enemy.js';
 import { type Boss, TOTAL_BOSSES } from '../data/bosses.js';
+import { WEAPONS, applyWeapon } from '../data/weapons.js';
 
 /** A player-issued action for one tick. (More variants land in later PRs.) */
 export interface MoveIntent {
@@ -151,13 +152,35 @@ export function update(
 
   let player = { ...state.player, pos: { x, y } };
   let enemies = state.enemies;
+  let pickups = state.pickups;
   let tooTired = false;
   let bossesDefeated = state.bossesDefeated ?? 0;
   let status: GameStatus = state.status ?? 'playing';
 
+  // --- Pickups: walking onto a weapon equips it to the single slot (TQ-010). ---
+  // Done after the move (so the player must reach the tile) and before the attack
+  // (so the swing this tick already swings the new weapon). The last matching
+  // pickup wins if several stack on one tile — the slot holds exactly one — and
+  // every picked-up tile is cleared, so a pile is consumed in a single step.
+  if (pickups !== undefined) {
+    const here = pickups.filter(
+      (p) => p.pos.x === player.pos.x && p.pos.y === player.pos.y,
+    );
+    if (here.length > 0) {
+      player = { ...player, weapon: here[here.length - 1]!.weaponId };
+      pickups = pickups.filter((p) => !here.includes(p));
+    }
+  }
+
   // --- Attack: resolve a radius swing against the enemies in reach. ---
   if (lastAttack !== undefined) {
-    const spec = ATTACKS[lastAttack.attackId];
+    // Fold the equipped weapon into the chosen attack before the engine resolves
+    // it — reusing the combat damage path, never forking it (TQ-010 constraint).
+    // Unarmed (`player.weapon` undefined) returns the attack unchanged.
+    const spec = applyWeapon(
+      ATTACKS[lastAttack.attackId],
+      player.weapon === undefined ? undefined : WEAPONS[player.weapon],
+    );
     // Enemies aren't Combatants (no stamina of their own), so adapt them to the
     // engine's shape; it only reads pos/hp/def from a target, and `def` comes
     // from the enemy data model so the damage formula has one source.
@@ -257,6 +280,7 @@ export function update(
     ...state,
     player,
     enemies,
+    pickups,
     tooTired,
     bossesDefeated,
     status,

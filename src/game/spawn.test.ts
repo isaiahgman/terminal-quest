@@ -2,15 +2,18 @@ import { describe, it, expect } from 'vitest';
 import {
   pickSpawn,
   placeBosses,
+  placeWeapons,
   walkableTiles,
   manhattan,
   BOSS_MIN_PLAYER_DISTANCE,
   BOSS_MIN_SEPARATION,
+  WEAPON_MIN_PLAYER_DISTANCE,
 } from './spawn.js';
 import { isWalkable } from './state.js';
 import type { Tile, World } from './state.js';
 import { Rng } from './rng.js';
 import { BOSS_ROSTER } from '../data/bosses.js';
+import { WEAPONS } from '../data/weapons.js';
 
 /** A fully-open square floor — plenty of room for spaced boss placement. */
 function openWorld(size: number): World {
@@ -172,5 +175,95 @@ describe('placeBosses', () => {
 
   it('returns no bosses when the world has no walkable ground', () => {
     expect(placeBosses(wallWorld(5), { x: 0, y: 0 }, new Rng(1))).toEqual([]);
+  });
+});
+
+describe('placeWeapons', () => {
+  const player = { x: 0, y: 0 };
+
+  it('places exactly `count` pickups on walkable ground, each a real weapon', () => {
+    const world = openWorld(60);
+    const pickups = placeWeapons(world, player, new Rng(7), 5);
+    expect(pickups).toHaveLength(5);
+    for (const p of pickups) {
+      expect(isWalkable(world, p.pos.x, p.pos.y)).toBe(true);
+      expect(WEAPONS[p.weaponId]).toBeDefined();
+    }
+  });
+
+  it('keeps every pickup away from the player spawn on a roomy world', () => {
+    const world = openWorld(60);
+    const pickups = placeWeapons(world, player, new Rng(7), 8);
+    for (const p of pickups) {
+      expect(manhattan(p.pos, player)).toBeGreaterThanOrEqual(
+        WEAPON_MIN_PLAYER_DISTANCE,
+      );
+    }
+  });
+
+  it('is deterministic: same seed yields identical placements', () => {
+    const world = openWorld(60);
+    const a = placeWeapons(world, player, new Rng(123), 5);
+    const b = placeWeapons(world, player, new Rng(123), 5);
+    expect(a).toEqual(b);
+  });
+
+  it('returns nothing for a non-positive count', () => {
+    const world = openWorld(60);
+    expect(placeWeapons(world, player, new Rng(1), 0)).toEqual([]);
+    expect(placeWeapons(world, player, new Rng(1), -3)).toEqual([]);
+  });
+
+  it('returns nothing when the world has no walkable ground', () => {
+    expect(placeWeapons(wallWorld(5), player, new Rng(1), 5)).toEqual([]);
+  });
+
+  it('falls back to any walkable tile when none is far enough from the player', () => {
+    // A 3×3 fixture: the farthest tile is Manhattan 4 from (0,0), below the
+    // distance floor, so the spacing filter empties and any walkable tile is used.
+    const F: Tile = 'floor';
+    const tiles: Tile[][] = [
+      [F, F, F],
+      [F, F, F],
+      [F, F, F],
+    ];
+    const world: World = { width: 3, height: 3, tiles, seed: 0 };
+    const pickups = placeWeapons(world, player, new Rng(2), 3);
+    expect(pickups).toHaveLength(3);
+    for (const p of pickups) {
+      expect(isWalkable(world, p.pos.x, p.pos.y)).toBe(true);
+    }
+  });
+
+  it('never drops a pickup on the player spawn, even in the cramped fallback', () => {
+    // Same 3×3 all-floor fixture: no tile is far enough, so the fallback path
+    // runs. The "no weapon underfoot" invariant must still hold — across many
+    // seeds, no pickup may share the player's spawn tile (else the run opens
+    // already armed, since `update` equips a same-tile pickup before any move).
+    const F: Tile = 'floor';
+    const tiles: Tile[][] = [
+      [F, F, F],
+      [F, F, F],
+      [F, F, F],
+    ];
+    const world: World = { width: 3, height: 3, tiles, seed: 0 };
+    for (let seed = 0; seed < 100; seed++) {
+      const pickups = placeWeapons(world, player, new Rng(seed), 5);
+      for (const p of pickups) {
+        expect(p.pos).not.toEqual(player);
+      }
+    }
+  });
+
+  it('returns nothing when the only walkable tile is the player spawn', () => {
+    // A lone floor cell that is the player's own tile: excluding it empties the
+    // fallback pool, so no pickup can be placed underfoot rather than dropped on
+    // the player.
+    const tiles: Tile[][] = Array.from({ length: 3 }, (): Tile[] =>
+      Array.from({ length: 3 }, (): Tile => 'wall'),
+    );
+    tiles[0]![0] = 'floor';
+    const world: World = { width: 3, height: 3, tiles, seed: 0 };
+    expect(placeWeapons(world, player, new Rng(1), 5)).toEqual([]);
   });
 });

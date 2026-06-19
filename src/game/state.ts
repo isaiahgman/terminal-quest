@@ -8,6 +8,7 @@ import type { Enemy } from './enemy.js';
 import type { EnemyAi } from './entities.js';
 import type { Progression } from './progression.js';
 import { createProgression } from './progression.js';
+import type { WeaponId } from '../data/weapons.js';
 
 export interface Vec2 {
   x: number;
@@ -47,6 +48,25 @@ export interface Player {
    * XP paths in {@link update} default a fresh level-1 progression.
    */
   progress?: Progression;
+  /**
+   * The single equipped-weapon slot (TQ-010, prd §7/F6). `undefined` ⇒ unarmed
+   * (the starting state and the well-defined "no gear" path — see `weapons.ts`).
+   * Walking onto a {@link Pickup} replaces whatever is here, and the attack path
+   * in {@link update} folds the equipped weapon's modifier into every swing via
+   * `applyWeapon`. Stored as the `WeaponId` (not the `Weapon`) so the slot stays
+   * a plain, serializable discriminant; the catalogue is the source of stats.
+   */
+  weapon?: WeaponId;
+}
+
+/**
+ * A weapon lying on the ground for the player to walk onto and equip (TQ-010,
+ * prd §7/F6). Plain data — a world position plus the `WeaponId` it grants — so
+ * it stays serializable (TQ-012) and the renderer can draw it data-driven.
+ */
+export interface Pickup {
+  pos: Vec2;
+  weaponId: WeaponId;
 }
 
 /**
@@ -78,6 +98,12 @@ export interface GameState {
    * omits it and `update` treats it as 0, so no bosses ⇒ no victory.
    */
   bossesDefeated?: number;
+  /**
+   * Weapon pickups lying in the world (TQ-010). Optional during incremental
+   * wiring — a state with none omits it. Each tick {@link update} equips and
+   * removes any pickup the player has stepped onto.
+   */
+  pickups?: readonly Pickup[];
   /**
    * Set when the player tried to attack this tick but lacked the stamina — the
    * data behind the brief "too tired" cue. The HUD surfaces it (TQ-008); for now

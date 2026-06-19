@@ -12,7 +12,12 @@ import { type SwarmKind, createEnemy } from './game/enemy.js';
 import { createEnemyAi } from './game/entities.js';
 import { generateWorld } from './game/world/generate.js';
 import { Rng } from './game/rng.js';
-import { manhattan, pickSpawn, placeBosses } from './game/spawn.js';
+import {
+  manhattan,
+  pickSpawn,
+  placeBosses,
+  placeWeapons,
+} from './game/spawn.js';
 import { runLoop } from './game/loop.js';
 import { Input } from './input/input.js';
 import {
@@ -37,6 +42,9 @@ const ENEMY_COUNT = 8;
 const ENEMY_KINDS: readonly SwarmKind[] = ['grunt', 'runner', 'brute'];
 /** Keep initial enemies at least this far (Manhattan) from the player's spawn. */
 const ENEMY_MIN_PLAYER_DISTANCE = 12;
+
+/** How many weapon pickups to scatter in a fresh world (TQ-010). */
+const WEAPON_COUNT = 5;
 
 /**
  * Scatter a handful of enemies on walkable ground, away from the player's spawn
@@ -210,6 +218,9 @@ async function main(): Promise<void> {
       ...spawnEnemies(world, player.pos, setupRng),
       ...spawnBosses(world, player.pos, setupRng),
     ],
+    // Weapon pickups scattered from the same seeded RNG (TQ-010). Not persisted
+    // by the save yet, so they reseed from the seed on resume — like the swarm.
+    pickups: placeWeapons(world, player.pos, setupRng, WEAPON_COUNT),
     tooTired: false,
     tick: save?.tick ?? 0,
   };

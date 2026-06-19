@@ -13,6 +13,7 @@
 import { type GameState } from '../game/state.js';
 import { createProgression, xpToNext } from '../game/progression.js';
 import { TOTAL_BOSSES } from '../data/bosses.js';
+import { WEAPONS } from '../data/weapons.js';
 
 /**
  * Rows the HUD reserves at the bottom of the screen. The renderer shrinks the
@@ -43,6 +44,8 @@ const SP_COLOR = 'brightGreen';
 const EMPTY_COLOR = 'gray';
 const TEXT_COLOR = 'white';
 const TIRED_COLOR = 'brightYellow';
+/** The equipped-weapon readout — bright cyan so the gear axis is easy to spot. */
+const WEAPON_COLOR = 'brightCyan';
 /** Blank padding cells carry no visible glyph, so their foreground is moot — a
  *  neutral name, kept decoupled from the bar palette. */
 const PAD_COLOR = 'gray';
@@ -150,6 +153,16 @@ function barSegments(
 }
 
 /**
+ * The equipped weapon's display name, or `'Unarmed'` for the empty slot
+ * (`undefined`) — the well-defined "no gear" readout matching `weapons.ts`. A
+ * pure lookup, kept here beside the other HUD presentation logic.
+ */
+export function weaponLabel(state: GameState): string {
+  const id = state.player.weapon;
+  return id === undefined ? 'Unarmed' : WEAPONS[id].name;
+}
+
+/**
  * Draw the HUD into the `HUD_ROWS`-tall band whose first row is `top`, spanning
  * `width` columns. Read-only: derives everything from `state` and mutates
  * nothing. Missing `progress`/`bossesDefeated` default (level-1 stats, 0
@@ -199,5 +212,6 @@ export function drawHud(
       text: `   Bosses ${state.bossesDefeated ?? 0}/${TOTAL_BOSSES}`,
       color: TEXT_COLOR,
     },
+    { text: `   ${weaponLabel(state)}`, color: WEAPON_COLOR },
   ]);
 }

@@ -1,6 +1,7 @@
-import { type Vec2, type World, isWalkable } from './state.js';
+import { type Pickup, type Vec2, type World, isWalkable } from './state.js';
 import { Rng } from './rng.js';
 import { BOSS_ROSTER, type Boss, createBoss } from '../data/bosses.js';
+import { WEAPONS, type WeaponId } from '../data/weapons.js';
 
 /**
  * Every walkable (floor) cell in the world, in row-major order — the placement
@@ -94,4 +95,63 @@ export function placeBosses(world: World, player: Vec2, rng: Rng): Boss[] {
     placed.push(createBoss(spec, pos));
   }
   return placed;
+}
+
+/** The weapon ids that can drop in the world — the whole catalogue (`weapons.ts`). */
+const WEAPON_IDS: readonly WeaponId[] = Object.keys(WEAPONS) as WeaponId[];
+
+/** Minimum Manhattan distance a weapon pickup is placed from the player's spawn. */
+export const WEAPON_MIN_PLAYER_DISTANCE = 6;
+
+/**
+ * Scatter `count` weapon pickups on walkable ground (TQ-010, prd §7/F6).
+ * Deterministic from the injected {@link Rng} (seed it off the world seed, like
+ * {@link pickSpawn}/{@link placeBosses}), so the same seed reproduces both the
+ * map and where its loot lies. Each pickup draws a uniformly-random weapon from
+ * the catalogue and a tile spaced from the player's spawn, so the run never opens
+ * with a free weapon underfoot — the first pickup is something you walk to.
+ *
+ * Spacing **degrades gracefully**: when no tile is far enough (a small or cramped
+ * world) the spacing filter is dropped and any walkable tile *other than the
+ * player's own* is used — the underfoot invariant holds in every path. Pickups may
+ * share a tile with each other or an enemy (a one-slot pickup over a tile is
+ * harmless — the latest stepped-onto wins), matching the swarm's loose placement;
+ * tighter spacing is a later concern. Returns the placed pickups for the caller
+ * to seed onto `pickups[]`.
+ */
+export function placeWeapons(
+  world: World,
+  player: Vec2,
+  rng: Rng,
+  count: number,
+): Pickup[] {
+  if (count <= 0 || WEAPON_IDS.length === 0) return [];
+
+  const walkable: Vec2[] = [];
+  for (let y = 0; y < world.height; y++) {
+    for (let x = 0; x < world.width; x++) {
+      if (isWalkable(world, x, y)) walkable.push({ x, y });
+    }
+  }
+  if (walkable.length === 0) return [];
+
+  // Prefer tiles away from the player so no weapon is underfoot at spawn; fall
+  // back to anywhere walkable *except the player's own tile* on a world too
+  // cramped to honour the spacing. The player's tile is always excluded so the
+  // run never opens with a free weapon underfoot — even in the fallback path,
+  // where `update` would otherwise equip a same-tile pickup before the first move.
+  const far = walkable.filter(
+    (t) => manhattan(t, player) >= WEAPON_MIN_PLAYER_DISTANCE,
+  );
+  const offPlayer = walkable.filter(
+    (t) => t.x !== player.x || t.y !== player.y,
+  );
+  const pool = far.length > 0 ? far : offPlayer;
+  if (pool.length === 0) return [];
+
+  const pickups: Pickup[] = [];
+  for (let i = 0; i < count; i++) {
+    pickups.push({ pos: rng.pick(pool), weaponId: rng.pick(WEAPON_IDS) });
+  }
+  return pickups;
 }

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Tile } from '../game/state.js';
-import { cellAttr, glyphForTile, PLAYER_GLYPH } from './sprites.js';
+import {
+  cellAttr,
+  glyphForTile,
+  PICKUP_GLYPH,
+  PLAYER_GLYPH,
+} from './sprites.js';
 
 // Compiler-enforced exhaustiveness: a Record<Tile, …> forces every Tile variant
 // to be listed, so adding a tile without updating this fails to typecheck rather
@@ -51,6 +56,19 @@ describe('player glyph', () => {
   it('stands out from the tiles it walks over', () => {
     expect(PLAYER_GLYPH.color).not.toBe(glyphForTile('floor').color);
     expect(PLAYER_GLYPH.color).not.toBe(glyphForTile('wall').color);
+  });
+});
+
+describe('pickup glyph (TQ-010)', () => {
+  it('is a non-empty glyph with a foreground colour', () => {
+    expect(PICKUP_GLYPH.char.length).toBeGreaterThan(0);
+    expect(PICKUP_GLYPH.color.length).toBeGreaterThan(0);
+  });
+
+  it('is visually distinct from the player and the tiles it lies on', () => {
+    expect(PICKUP_GLYPH.char).not.toBe(PLAYER_GLYPH.char);
+    expect(PICKUP_GLYPH.char).not.toBe(glyphForTile('floor').char);
+    expect(PICKUP_GLYPH.char).not.toBe(glyphForTile('wall').char);
   });
 });
 
