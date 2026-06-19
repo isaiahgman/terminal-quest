@@ -183,6 +183,10 @@ async function main(): Promise<void> {
   // enemies alongside the swarm so they move/fight/render via the shared paths
   // and the run is winnable. Like the swarm, they respawn from the seed each load
   // (enemies aren't persisted), so the roster is always present on a resume too.
+  // NOTE: defeat progress isn't persisted yet either — `bossesDefeated` is absent
+  // from SaveData (SAVE_VERSION=1), so a resume restarts the win count at 0/N with
+  // the full roster respawned. Persisting it is deferred to a later save bump
+  // (tracked for TQ-012); until then a quit-and-resume erases boss progress.
   const state: GameState = {
     world,
     player,
