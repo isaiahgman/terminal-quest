@@ -12,7 +12,7 @@ import { type SwarmKind, createEnemy } from './game/enemy.js';
 import { createEnemyAi } from './game/entities.js';
 import { generateWorld } from './game/world/generate.js';
 import { Rng } from './game/rng.js';
-import { pickSpawn, placeBosses } from './game/spawn.js';
+import { manhattan, pickSpawn, placeBosses } from './game/spawn.js';
 import { runLoop } from './game/loop.js';
 import { Input } from './input/input.js';
 import {
@@ -35,6 +35,8 @@ const AUTOSAVE_INTERVAL_MS = 5000;
 /** How many enemies to seed the world with, and the mix of kinds to draw from. */
 const ENEMY_COUNT = 8;
 const ENEMY_KINDS: readonly SwarmKind[] = ['grunt', 'runner', 'brute'];
+/** Keep initial enemies at least this far (Manhattan) from the player's spawn. */
+const ENEMY_MIN_PLAYER_DISTANCE = 12;
 
 /**
  * Scatter a handful of enemies on walkable ground, away from the player's spawn
@@ -46,7 +48,7 @@ function spawnEnemies(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
   const open: Vec2[] = [];
   for (let y = 0; y < world.height; y++) {
     for (let x = 0; x < world.width; x++) {
-      const far = Math.abs(x - player.x) + Math.abs(y - player.y) > 12;
+      const far = manhattan({ x, y }, player) > ENEMY_MIN_PLAYER_DISTANCE;
       if (far && isWalkable(world, x, y)) open.push({ x, y });
     }
   }
@@ -122,6 +124,20 @@ function shutdown(code = 0): void {
 }
 
 async function main(): Promise<void> {
+  // Terminal Quest needs a real interactive terminal: a following camera sizes
+  // the world to the viewport, and raw-mode key events drive the loop. Without a
+  // TTY, terminal-kit reports Infinite dimensions (so world generation throws a
+  // RangeError deep in setup) and there is no keyboard to play with. Refuse up
+  // front with a clear message — before touching fullscreen/raw mode — instead
+  // of crashing or leaving a non-interactive shell in a half-set-up state.
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error(
+      'terminal-quest must be run in an interactive terminal (a TTY).',
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   term.fullscreen(true);
   term.hideCursor(true);
 
