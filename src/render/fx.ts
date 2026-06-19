@@ -185,10 +185,11 @@ export function riseOffset(fx: DamageNumberFx): number {
 /**
  * The current screen-shake offset derived from all live shake effects — a pure,
  * deterministic function of `state` (NO RNG), so the same FxState always yields
- * the same offset. Each shake contributes a decaying displacement whose
- * direction alternates with its remaining lifetime (a cheap, reproducible
- * jitter); the strongest live shake dominates. With no live shakes the offset is
- * `{ x: 0, y: 0 }`.
+ * the same offset. Each shake contributes a decaying displacement whose x and y
+ * directions alternate *independently* with its remaining lifetime (a cheap,
+ * reproducible 2-D jitter — x and y flip on different quanta, so the kick is not
+ * locked to a single diagonal); the strongest live shake dominates. With no live
+ * shakes the offset is `{ x: 0, y: 0 }`.
  */
 export function shakeOffset(state: FxState): Vec2 {
   let best: ShakeFx | undefined;
@@ -204,9 +205,14 @@ export function shakeOffset(state: FxState): Vec2 {
   const amp = Math.round(decayed);
   if (amp <= 0) return { x: 0, y: 0 };
 
-  // Deterministic alternating direction: derive a sign from a coarse quantum of
-  // remaining life so the kick flips back and forth as it ages, with no RNG.
-  const phase = Math.floor((best.ttl - best.remaining) / (best.ttl / 4));
-  const sign = phase % 2 === 0 ? 1 : -1;
-  return { x: amp * sign, y: amp * sign };
+  // Deterministic alternating direction, derived from coarse quanta of elapsed
+  // life (no RNG). x and y use *different* quanta (quarters vs. thirds) so their
+  // signs flip out of step — the kick traces a real 2-D jitter rather than
+  // sliding along the y=x diagonal.
+  const elapsed = best.ttl - best.remaining;
+  const xPhase = Math.floor(elapsed / (best.ttl / 4));
+  const yPhase = Math.floor(elapsed / (best.ttl / 3));
+  const xSign = xPhase % 2 === 0 ? 1 : -1;
+  const ySign = yPhase % 2 === 0 ? 1 : -1;
+  return { x: amp * xSign, y: amp * ySign };
 }
