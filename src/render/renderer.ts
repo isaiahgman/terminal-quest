@@ -34,6 +34,21 @@ export class Renderer {
     });
   }
 
+  /**
+   * Put one glyph at viewport cell (x, y) with the given attr. The shared shape
+   * behind the handful of entity draws (each enemy, the player) — left-to-right,
+   * no wrap. The per-cell tile pass deliberately does *not* use this: it reuses a
+   * single options object so the hot loop allocates nothing per cell.
+   */
+  private putGlyph(
+    x: number,
+    y: number,
+    attr: ReturnType<typeof cellAttr>,
+    char: string,
+  ): void {
+    this.screen.put({ x, y, attr, wrap: false, dx: 1, dy: 0 }, char);
+  }
+
   render(state: GameState): void {
     const { width, height } = this.screen;
     // Reserve the bottom `HUD_ROWS` for the HUD and pan the world inside the
@@ -81,15 +96,10 @@ export class Renderer {
       const ex = enemy.pos.x - cam.x;
       const ey = enemy.pos.y - cam.y;
       if (ex < 0 || ey < 0 || ex >= width || ey >= playH) continue;
-      this.screen.put(
-        {
-          x: ex,
-          y: ey,
-          attr: cellAttr({ char: enemy.glyph, color: enemy.color }, false),
-          wrap: false,
-          dx: 1,
-          dy: 0,
-        },
+      this.putGlyph(
+        ex,
+        ey,
+        cellAttr({ char: enemy.glyph, color: enemy.color }, false),
         enemy.glyph,
       );
     }
@@ -100,17 +110,7 @@ export class Renderer {
     const px = state.player.pos.x - cam.x;
     const py = state.player.pos.y - cam.y;
     if (px >= 0 && py >= 0 && px < width && py < playH) {
-      this.screen.put(
-        {
-          x: px,
-          y: py,
-          attr: cellAttr(PLAYER_GLYPH, true),
-          wrap: false,
-          dx: 1,
-          dy: 0,
-        },
-        PLAYER_GLYPH.char,
-      );
+      this.putGlyph(px, py, cellAttr(PLAYER_GLYPH, true), PLAYER_GLYPH.char);
     }
 
     // The HUD owns the reserved band below the world viewport.
