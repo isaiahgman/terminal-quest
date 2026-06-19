@@ -93,6 +93,18 @@ describe('growBase', () => {
     expect(afterReload).toEqual(grown);
   });
 
+  it('preserves a stored tier that exceeds the count-derived tier (guard, not floor)', () => {
+    // A grown save can carry a tier higher than baseTierFor(bossesDefeated) —
+    // e.g. if BOSSES_PER_TIER were ever retuned lower between saves, or a tier
+    // was earned by some future signal. The `Math.max(base.tier, ...)` guard
+    // must keep that inflated tier rather than recomputing it down from the
+    // count. This input has tier (6) strictly above baseTierFor(0) (1), so it
+    // fails if the guard is dropped to `tier: baseTierFor(settled)`.
+    const inflated: Base = { tier: BASE_START_TIER + 5, bossesDefeated: 0 };
+    expect(baseTierFor(inflated.bossesDefeated)).toBeLessThan(inflated.tier);
+    expect(growBase(inflated, 0)).toEqual(inflated);
+  });
+
   it('crosses several tiers in one settle (big jump)', () => {
     const grown = growBase(createBase(), BOSSES_PER_TIER * 4);
     expect(grown.tier).toBe(BASE_START_TIER + 4);
