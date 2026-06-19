@@ -30,6 +30,18 @@ describe('tileAt', () => {
     expect(tileAt(world, world.width, 0)).toBe('wall'); // x >= width
     expect(tileAt(world, 0, world.height)).toBe('wall'); // y >= height
   });
+
+  it('falls back to wall for NaN/fractional coords and a ragged tiles row', () => {
+    const world = makeWorld();
+    // NaN slips past every </>= comparison, so the nullish fallback (not the
+    // bounds check) is what keeps these from throwing on tiles[NaN].
+    expect(tileAt(world, NaN, 0)).toBe('wall');
+    expect(tileAt(world, 0.5, 0)).toBe('wall');
+    // An in-bounds index into a short/ragged row also degrades to wall.
+    const ragged: World = { width: 2, height: 2, tiles: [['floor']], seed: 0 };
+    expect(tileAt(ragged, 1, 0)).toBe('wall'); // tiles[0][1] is missing
+    expect(tileAt(ragged, 0, 1)).toBe('wall'); // tiles[1] is missing
+  });
 });
 
 describe('isWalkable', () => {
