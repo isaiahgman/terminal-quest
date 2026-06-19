@@ -117,4 +117,17 @@ describe('KeyDecoder — robustness', () => {
       { name: 'UP', kind: 'press' },
     ]);
   });
+
+  it('drops a desynced unterminated CSI run instead of buffering it forever', () => {
+    const decoder = new KeyDecoder();
+    // A CSI that never gets a final byte (line noise / protocol desync). Once it
+    // grows past the cap it must be discarded, not retained — otherwise it would
+    // grow unbounded and swallow every later keystroke.
+    const garbage = `${CSI}${'9'.repeat(200)}`;
+    expect(decoder.decode(garbage)).toEqual([]);
+    // The stuck run is gone: a normal key after it still decodes.
+    expect(decoder.decode(`${CSI}119;1:1u`)).toEqual([
+      { name: 'w', kind: 'press' },
+    ]);
+  });
 });
