@@ -24,6 +24,8 @@ const PALETTE = {
   wall: { char: '▓', color: 'white', bg: 'brightBlack' },
   /** Deliberately the brightest thing on screen, so it is instantly findable. */
   player: { char: '@', color: 'brightYellow', bg: 'black' },
+  /** A weapon lying on the ground (TQ-010) — a bright cyan dagger to walk onto. */
+  pickup: { char: '↑', color: 'brightCyan', bg: 'black' },
 } as const satisfies Record<string, Glyph>;
 
 export function glyphForTile(tile: Tile): Readonly<Glyph> {
@@ -37,6 +39,9 @@ export function glyphForTile(tile: Tile): Readonly<Glyph> {
 
 /** The player's glyph — high-contrast against every tile background. */
 export const PLAYER_GLYPH: Readonly<Glyph> = PALETTE.player;
+
+/** A weapon-pickup glyph — drawn on its world tile beneath enemies/player. */
+export const PICKUP_GLYPH: Readonly<Glyph> = PALETTE.pickup;
 
 /**
  * Build a terminal-kit cell attribute from a glyph. `bgColor` is included only

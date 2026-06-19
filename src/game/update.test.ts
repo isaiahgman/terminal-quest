@@ -343,6 +343,108 @@ describe('update — attacks spend stamina and damage enemies', () => {
   });
 });
 
+describe('update — weapons: equip on pickup + boosted damage (TQ-010)', () => {
+  it('walking onto a pickup equips it to the single slot and removes it', () => {
+    // Player at (1,1) steps right onto a pickup at (2,1).
+    const state: GameState = {
+      ...makeState(),
+      pickups: [{ pos: { x: 2, y: 1 }, weaponId: 'iron-sword' }],
+    };
+    const next = update(state, [{ type: 'move', dx: 1, dy: 0 }], TICK, noRng);
+    expect(next.player.pos).toEqual({ x: 2, y: 1 });
+    expect(next.player.weapon).toBe('iron-sword');
+    expect(next.pickups).toEqual([]); // consumed
+  });
+
+  it('the latest pickup wins when several share the stepped-onto tile', () => {
+    const state: GameState = {
+      ...makeState(),
+      pickups: [
+        { pos: { x: 2, y: 1 }, weaponId: 'rusted-dagger' },
+        { pos: { x: 2, y: 1 }, weaponId: 'warhammer' },
+      ],
+    };
+    const next = update(state, [{ type: 'move', dx: 1, dy: 0 }], TICK, noRng);
+    expect(next.player.weapon).toBe('warhammer'); // last on the tile
+    expect(next.pickups).toEqual([]); // the whole pile is consumed
+  });
+
+  it('a new pickup replaces the previously equipped weapon (single slot)', () => {
+    const player: Player = {
+      ...createPlayer({ x: 1, y: 1 }),
+      weapon: 'warhammer',
+    };
+    const state: GameState = {
+      ...makeState({ player }),
+      pickups: [{ pos: { x: 2, y: 1 }, weaponId: 'rusted-dagger' }],
+    };
+    const next = update(state, [{ type: 'move', dx: 1, dy: 0 }], TICK, noRng);
+    expect(next.player.weapon).toBe('rusted-dagger');
+  });
+
+  it('leaves a pickup untouched when the player only passes near it', () => {
+    // Player at (1,1) moves down to (1,2); the pickup at (2,1) is not stepped on.
+    const state: GameState = {
+      ...makeState(),
+      pickups: [{ pos: { x: 2, y: 1 }, weaponId: 'iron-sword' }],
+    };
+    const next = update(state, [{ type: 'move', dx: 0, dy: 1 }], TICK, noRng);
+    expect(next.player.weapon).toBeUndefined();
+    expect(next.pickups).toHaveLength(1);
+  });
+
+  it('an equipped weapon adds its damageBonus to the attack (reuses the combat path)', () => {
+    // Equip the iron-sword (+4 damage) up front, then jab an adjacent grunt:
+    // base 2 + bonus 4 + atk 3 - def 0 = 9 → 10 - 9 = 1 (vs 5 unarmed).
+    const player: Player = {
+      ...createPlayer({ x: 1, y: 1 }),
+      weapon: 'iron-sword',
+    };
+    const state = makeState({ player, enemies: [liveEnemy('grunt', 2, 1)] });
+    const next = update(
+      state,
+      [{ type: 'attack', attackId: 'quick-jab' }],
+      TICK,
+      scriptedRng([0]),
+    );
+    expect(next.enemies![0]!.enemy.hp).toBe(1);
+  });
+
+  it('a weapon picked up this tick already swings boosted on the same tick', () => {
+    // Player at (1,1) steps onto the iron-sword at (2,1) AND jabs; the grunt sits
+    // at (2,0), adjacent to the new position. Equip happens before the attack, so
+    // the boosted damage (9) lands this tick, not next: 10 - 9 = 1.
+    const state: GameState = {
+      ...makeState({ enemies: [liveEnemy('grunt', 2, 0)] }),
+      pickups: [{ pos: { x: 2, y: 1 }, weaponId: 'iron-sword' }],
+    };
+    const next = update(
+      state,
+      [
+        { type: 'move', dx: 1, dy: 0 },
+        { type: 'attack', attackId: 'quick-jab' },
+      ],
+      TICK,
+      scriptedRng([0]),
+    );
+    expect(next.player.weapon).toBe('iron-sword');
+    expect(next.enemies![0]!.enemy.hp).toBe(1);
+  });
+
+  it('unarmed leaves the attack unchanged (no slot, no bonus)', () => {
+    const state = makeState({ enemies: [liveEnemy('grunt', 2, 1)] });
+    const next = update(
+      state,
+      [{ type: 'attack', attackId: 'quick-jab' }],
+      TICK,
+      scriptedRng([0]),
+    );
+    // base 2 + atk 3 = 5 → 10 - 5 = 5, the unarmed baseline.
+    expect(next.player.weapon).toBeUndefined();
+    expect(next.enemies![0]!.enemy.hp).toBe(5);
+  });
+});
+
 describe('update — risk/reward: low vs high attacks differ in play', () => {
   // One enemy three tiles straight below the player: out of the jab's radius 1.5
   // (dist² 9 > 2.25), inside the maelstrom's radius 4. Same press, very

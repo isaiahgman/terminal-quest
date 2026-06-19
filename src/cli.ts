@@ -12,7 +12,7 @@ import { type SwarmKind, createEnemy } from './game/enemy.js';
 import { createEnemyAi } from './game/entities.js';
 import { generateWorld } from './game/world/generate.js';
 import { Rng } from './game/rng.js';
-import { pickSpawn } from './game/spawn.js';
+import { pickSpawn, placeWeapons } from './game/spawn.js';
 import { runLoop } from './game/loop.js';
 import { Input } from './input/input.js';
 import {
@@ -35,6 +35,9 @@ const AUTOSAVE_INTERVAL_MS = 5000;
 /** How many enemies to seed the world with, and the mix of kinds to draw from. */
 const ENEMY_COUNT = 8;
 const ENEMY_KINDS: readonly SwarmKind[] = ['grunt', 'runner', 'brute'];
+
+/** How many weapon pickups to scatter in a fresh world (TQ-010). */
+const WEAPON_COUNT = 5;
 
 /**
  * Scatter a handful of enemies on walkable ground, away from the player's spawn
@@ -167,6 +170,9 @@ async function main(): Promise<void> {
     world,
     player,
     enemies: spawnEnemies(world, player.pos, setupRng),
+    // Weapon pickups scattered from the same seeded RNG (TQ-010). Not persisted
+    // by the save yet, so they reseed from the seed on resume — like the swarm.
+    pickups: placeWeapons(world, player.pos, setupRng, WEAPON_COUNT),
     tooTired: false,
     tick: save?.tick ?? 0,
   };

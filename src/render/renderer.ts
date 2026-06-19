@@ -1,7 +1,12 @@
 import terminalKit from 'terminal-kit';
 import { type GameState, tileAt } from '../game/state.js';
 import { computeCamera } from '../game/world/camera.js';
-import { cellAttr, glyphForTile, PLAYER_GLYPH } from './sprites.js';
+import {
+  cellAttr,
+  glyphForTile,
+  PICKUP_GLYPH,
+  PLAYER_GLYPH,
+} from './sprites.js';
 import { HUD_ROWS, drawHud } from './hud.js';
 
 type Term = typeof terminalKit.terminal;
@@ -71,6 +76,27 @@ export class Renderer {
         cellOpts.attr.bgColor = g.bg ?? '';
         this.screen.put(cellOpts, g.char);
       }
+    }
+
+    // Weapon pickups, drawn after tiles but before enemies/player, so anything
+    // standing on a pickup's tile covers it (the pickup is gone the tick the
+    // player steps on, so the only overlap is an enemy passing over). Skip any
+    // outside the viewport. (TQ-010)
+    for (const pickup of state.pickups ?? []) {
+      const px = pickup.pos.x - cam.x;
+      const py = pickup.pos.y - cam.y;
+      if (px < 0 || py < 0 || px >= width || py >= playH) continue;
+      this.screen.put(
+        {
+          x: px,
+          y: py,
+          attr: cellAttr(PICKUP_GLYPH, true),
+          wrap: false,
+          dx: 1,
+          dy: 0,
+        },
+        PICKUP_GLYPH.char,
+      );
     }
 
     // Enemies, drawn before the player so the player glyph stays on top when an

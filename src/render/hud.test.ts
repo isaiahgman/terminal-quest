@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   barFill,
   drawHud,
+  weaponLabel,
   HUD_ROWS,
   TOTAL_BOSSES,
   type HudScreen,
 } from './hud.js';
+import { WEAPONS } from '../data/weapons.js';
 import type { GameState, Player } from '../game/state.js';
 import type { Progression } from '../game/progression.js';
 
@@ -239,5 +241,30 @@ describe('drawHud', () => {
       drawHud(screen, state, 0, WIDTH);
     }).not.toThrow();
     expect(state).toEqual(snapshot);
+  });
+
+  it('shows the equipped weapon name on the stats row (TQ-010)', () => {
+    const screen = new FakeScreen();
+    const player: Player = { ...makeState().player, weapon: 'iron-sword' };
+    // A generous width so the readout (after Lv/XP/Bosses) is not clipped.
+    drawHud(screen, makeState({ player }), 0, 80);
+    expect(rowText(screen, 2, 80)).toContain(WEAPONS['iron-sword'].name);
+  });
+
+  it('shows "Unarmed" when the slot is empty', () => {
+    const screen = new FakeScreen();
+    drawHud(screen, makeState(), 0, 80); // makeState's player has no weapon
+    expect(rowText(screen, 2, 80)).toContain('Unarmed');
+  });
+});
+
+describe('weaponLabel', () => {
+  it('returns "Unarmed" for an empty slot', () => {
+    expect(weaponLabel(makeState())).toBe('Unarmed');
+  });
+
+  it('returns the catalogue display name for the equipped weapon', () => {
+    const player: Player = { ...makeState().player, weapon: 'warhammer' };
+    expect(weaponLabel(makeState({ player }))).toBe(WEAPONS.warhammer.name);
   });
 });

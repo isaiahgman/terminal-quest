@@ -293,4 +293,36 @@ describe('Renderer', () => {
     // The HUD still drew (its rows are clipped by the buffer, not skipped).
     expect(recordedPuts(renderer).length).toBeGreaterThan(0);
   });
+
+  it('draws a weapon pickup on its tile, after the tile pass and below the player (TQ-010)', async () => {
+    const { Renderer } = await import('./renderer.js');
+    const { PICKUP_GLYPH, PLAYER_GLYPH, cellAttr } =
+      await import('./sprites.js');
+
+    // Pickup on the open floor at (2,1) in the 3x3 world; player at (1,1).
+    const state: GameState = {
+      ...makeState(),
+      enemies: [],
+      pickups: [{ pos: { x: 2, y: 1 }, weaponId: 'iron-sword' }],
+    };
+    const renderer = new Renderer();
+    renderer.render(state);
+
+    const puts = recordedPuts(renderer);
+    // The 3x3 world fits the viewport with no camera offset, so world == screen.
+    const atPickup = puts.filter((p) => p.x === 2 && p.y === 1);
+    // Tile underneath, then the pickup glyph on top — overdraw, not replace.
+    expect(atPickup).toHaveLength(2);
+    const pickupAttr = cellAttr(PICKUP_GLYPH, true);
+    expect(atPickup[1]).toEqual({
+      x: 2,
+      y: 1,
+      char: PICKUP_GLYPH.char,
+      color: pickupAttr.color,
+      bold: true,
+      bgColor: pickupAttr.bgColor,
+    });
+    // The pickup is not the player glyph, and the player still draws last overall.
+    expect(PICKUP_GLYPH.char).not.toBe(PLAYER_GLYPH.char);
+  });
 });
