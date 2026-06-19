@@ -135,10 +135,19 @@ export function createPlayer(pos: Vec2): Player {
   };
 }
 
-/** Tile lookup that treats out-of-bounds as solid wall. */
+/**
+ * Tile lookup that treats anything off the map as solid `'wall'`. The bounds
+ * check handles the common out-of-bounds case; the nullish fallback then covers
+ * the rest — a `NaN`/fractional coordinate (which slips past every `<`/`>=`
+ * comparison) or a short/ragged `tiles` row — so a bad coordinate degrades to
+ * "blocked" rather than throwing inside the render hot loop. No live caller
+ * passes a bad coordinate today (positions are integers and `generateWorld`
+ * builds a rectangular `tiles`), but the fallback retires the unchecked
+ * non-null assertions that silently trusted those invariants.
+ */
 export function tileAt(world: World, x: number, y: number): Tile {
   if (x < 0 || y < 0 || x >= world.width || y >= world.height) return 'wall';
-  return world.tiles[y]![x]!;
+  return world.tiles[y]?.[x] ?? 'wall';
 }
 
 export function isWalkable(world: World, x: number, y: number): boolean {

@@ -12,7 +12,12 @@ import { type SwarmKind, createEnemy } from './game/enemy.js';
 import { createEnemyAi } from './game/entities.js';
 import { generateWorld } from './game/world/generate.js';
 import { Rng } from './game/rng.js';
-import { pickSpawn, placeWeapons } from './game/spawn.js';
+import {
+  manhattan,
+  pickSpawn,
+  placeBosses,
+  placeWeapons,
+} from './game/spawn.js';
 import { runLoop } from './game/loop.js';
 import { Input } from './input/input.js';
 import {
@@ -35,6 +40,8 @@ const AUTOSAVE_INTERVAL_MS = 5000;
 /** How many enemies to seed the world with, and the mix of kinds to draw from. */
 const ENEMY_COUNT = 8;
 const ENEMY_KINDS: readonly SwarmKind[] = ['grunt', 'runner', 'brute'];
+/** Keep initial enemies at least this far (Manhattan) from the player's spawn. */
+const ENEMY_MIN_PLAYER_DISTANCE = 12;
 
 /** How many weapon pickups to scatter in a fresh world (TQ-010). */
 const WEAPON_COUNT = 5;
@@ -49,7 +56,7 @@ function spawnEnemies(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
   const open: Vec2[] = [];
   for (let y = 0; y < world.height; y++) {
     for (let x = 0; x < world.width; x++) {
-      const far = Math.abs(x - player.x) + Math.abs(y - player.y) > 12;
+      const far = manhattan({ x, y }, player) > ENEMY_MIN_PLAYER_DISTANCE;
       if (far && isWalkable(world, x, y)) open.push({ x, y });
     }
   }
@@ -63,6 +70,22 @@ function spawnEnemies(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
     });
   }
   return enemies;
+}
+
+/**
+ * Place the boss roster (TQ-011) into the live enemy set. Each boss is a tough
+ * {@link Enemy} (`kind: 'boss'`), so it rides in `enemies[]` as a {@link LiveEnemy}
+ * and reuses the existing movement/combat/contact/XP/render paths — the only
+ * boss-specific logic (defeat-counting, the victory flip, the signature) lives in
+ * the sim. Deterministic from the injected {@link Rng} (seeded off the world
+ * seed), like {@link spawnEnemies}; bosses are spaced far from the player and each
+ * other by {@link placeBosses}, not scattered as a swarm.
+ */
+function spawnBosses(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
+  return placeBosses(world, player, rng).map((boss) => ({
+    enemy: boss,
+    ai: createEnemyAi(),
+  }));
 }
 
 /** The player's level, defaulting to 1 for pre-progression states. */
@@ -109,6 +132,20 @@ function shutdown(code = 0): void {
 }
 
 async function main(): Promise<void> {
+  // Terminal Quest needs a real interactive terminal: a following camera sizes
+  // the world to the viewport, and raw-mode key events drive the loop. Without a
+  // TTY, terminal-kit reports Infinite dimensions (so world generation throws a
+  // RangeError deep in setup) and there is no keyboard to play with. Refuse up
+  // front with a clear message — before touching fullscreen/raw mode — instead
+  // of crashing or leaving a non-interactive shell in a half-set-up state.
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error(
+      'terminal-quest must be run in an interactive terminal (a TTY).',
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   term.fullscreen(true);
   term.hideCursor(true);
 
@@ -166,10 +203,21 @@ async function main(): Promise<void> {
   } else {
     player = createPlayer(pickSpawn(world, setupRng));
   }
+  // Bosses are the win condition (prd §7/F7): place the full roster as live
+  // enemies alongside the swarm so they move/fight/render via the shared paths
+  // and the run is winnable. Like the swarm, they respawn from the seed each load
+  // (enemies aren't persisted), so the roster is always present on a resume too.
+  // NOTE: defeat progress isn't persisted yet either — `bossesDefeated` is absent
+  // from SaveData (SAVE_VERSION=1), so a resume restarts the win count at 0/N with
+  // the full roster respawned. Persisting it is deferred to a later save bump
+  // (tracked for TQ-012); until then a quit-and-resume erases boss progress.
   const state: GameState = {
     world,
     player,
-    enemies: spawnEnemies(world, player.pos, setupRng),
+    enemies: [
+      ...spawnEnemies(world, player.pos, setupRng),
+      ...spawnBosses(world, player.pos, setupRng),
+    ],
     // Weapon pickups scattered from the same seeded RNG (TQ-010). Not persisted
     // by the save yet, so they reseed from the seed on resume — like the swarm.
     pickups: placeWeapons(world, player.pos, setupRng, WEAPON_COUNT),

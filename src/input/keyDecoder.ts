@@ -34,6 +34,19 @@ const CSI_FINAL_MAX = 0x7e; // '~'
 const CTRL_C_BYTE = 0x03;
 const C_CODEPOINT = 99; // 'c' — becomes CTRL_C only with the Ctrl modifier
 
+/**
+ * Upper bound on the bytes a single not-yet-terminated CSI escape sequence may
+ * buffer before it is treated as a desynced/garbage stream and discarded. Every
+ * key sequence we decode (kitty `CSI … u`, legacy `CSI … A`, SS3 `ESC O A`) is
+ * an order of magnitude shorter than this, so a "sequence" that grows past it
+ * has no final byte coming — most likely line noise or a protocol desync. Left
+ * unbounded, such a run grows `pending` without limit (every later chunk is
+ * prepended and re-scanned) and silently swallows every keystroke behind it, so
+ * we cut it loose. 64 is comfortably above any real sequence and well below a
+ * size worth worrying about.
+ */
+const MAX_PENDING_SEQUENCE_BYTES = 64;
+
 function isPrintableAscii(codepoint: number): boolean {
   return codepoint >= 0x20 && codepoint <= 0x7e;
 }
@@ -189,7 +202,19 @@ export class KeyDecoder {
         ) {
           j += 1;
         }
-        if (j >= buf.length) break; // incomplete sequence — wait for more bytes
+        if (j >= buf.length) {
+          // No final byte yet. Normally wait for the next chunk to complete the
+          // sequence — but if this unterminated run has already outgrown any
+          // real key sequence, the stream has desynced. Drop everything from the
+          // ESC onward (there is no complete sequence in it by definition) so
+          // `pending` can't grow without bound and stop swallowing every later
+          // keystroke behind the stuck sequence.
+          if (buf.length - i > MAX_PENDING_SEQUENCE_BYTES) {
+            i = buf.length;
+            continue;
+          }
+          break; // still short — wait for more bytes
+        }
 
         const params = buf.slice(i + 2, j);
         const event = decodeCsi(params, buf.charAt(j));

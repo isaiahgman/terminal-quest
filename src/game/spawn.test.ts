@@ -3,6 +3,7 @@ import {
   pickSpawn,
   placeBosses,
   placeWeapons,
+  walkableTiles,
   manhattan,
   BOSS_MIN_PLAYER_DISTANCE,
   BOSS_MIN_SEPARATION,
@@ -52,6 +53,23 @@ function makeWorld(): World {
   ];
   return { width: 3, height: 3, tiles, seed: 0 };
 }
+
+describe('walkableTiles', () => {
+  it('returns exactly the floor cells in row-major order', () => {
+    // makeWorld's floors are the 4 corners + the centre of a 3×3 checkerboard.
+    expect(walkableTiles(makeWorld())).toEqual([
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+      { x: 1, y: 1 },
+      { x: 0, y: 2 },
+      { x: 2, y: 2 },
+    ]);
+  });
+
+  it('is empty when there is no floor', () => {
+    expect(walkableTiles(wallWorld(4))).toEqual([]);
+  });
+});
 
 describe('pickSpawn', () => {
   it('always returns a floor tile', () => {

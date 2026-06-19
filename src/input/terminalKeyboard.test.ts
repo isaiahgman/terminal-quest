@@ -148,4 +148,24 @@ describe('startKeyboard — restore (the terminal-safety contract)', () => {
     expect(stdout.all).not.toContain(DISABLE);
     expect(stdin.rawModes).toEqual([true, false]);
   });
+
+  it('pops the protocol if startup throws after enabling it', async () => {
+    const { io, stdin, stdout } = makeIo();
+    const input = new Input(() => 0);
+    // Force a failure in the post-ENABLE setup — the window where the handle
+    // does not exist yet, so the caller's exit path can't restore the terminal.
+    input.useReleaseEvents = (): void => {
+      throw new Error('boom');
+    };
+    const promise = startKeyboard(input, io);
+    stdin.feed(KITTY_REPLY);
+
+    await expect(promise).rejects.toThrow('boom');
+    // The pushed protocol must be popped and raw mode turned back off, so a
+    // failed startup still leaves the terminal clean (the always-restore rule).
+    expect(stdout.all).toContain(ENABLE);
+    expect(stdout.all).toContain(DISABLE);
+    expect(stdin.rawModes).toEqual([true, false]);
+    expect(stdin.paused).toBe(1);
+  });
 });

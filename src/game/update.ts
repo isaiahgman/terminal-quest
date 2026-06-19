@@ -56,6 +56,24 @@ function playerCombatant(player: GameState['player']): Combatant {
   };
 }
 
+/**
+ * An enemy as the combat engine's {@link Combatant} target. {@link resolveAttack}
+ * only reads `pos`/`hp`/`def` off a target, but the shape also carries stamina
+ * fields — enemies have no stamina of their own, so they're zeroed. The enemy
+ * twin of {@link playerCombatant}: one named adapter from the entity model to
+ * combat math, rather than an anonymous inline object literal.
+ */
+function enemyCombatant(enemy: Enemy): Combatant {
+  return {
+    pos: enemy.pos,
+    hp: enemy.hp,
+    stamina: 0,
+    maxStamina: 0,
+    atk: enemy.atk,
+    def: enemy.def,
+  };
+}
+
 /** A boss is an enemy whose archetype tag is `'boss'` (only `createBoss` sets it). */
 function isBoss(enemy: Enemy): enemy is Boss {
   return enemy.kind === 'boss';
@@ -166,14 +184,9 @@ export function update(
     // Enemies aren't Combatants (no stamina of their own), so adapt them to the
     // engine's shape; it only reads pos/hp/def from a target, and `def` comes
     // from the enemy data model so the damage formula has one source.
-    const targets: Combatant[] = (enemies ?? []).map(({ enemy }) => ({
-      pos: enemy.pos,
-      hp: enemy.hp,
-      stamina: 0,
-      maxStamina: 0,
-      atk: enemy.atk,
-      def: enemy.def,
-    }));
+    const targets: Combatant[] = (enemies ?? []).map(({ enemy }) =>
+      enemyCombatant(enemy),
+    );
     const result = resolveAttack(playerCombatant(player), targets, spec, rng);
     if (result.blocked) {
       tooTired = true;
@@ -194,9 +207,13 @@ export function update(
   if (enemies !== undefined) {
     const slain = enemies.filter(({ enemy }) => enemy.hp <= 0);
     if (slain.length > 0) {
-      // Partition by membership, not the complementary `hp > 0`: both predicates
-      // are false for a non-finite hp, so a NaN-hp enemy would otherwise vanish.
-      enemies = enemies.filter((live) => !slain.includes(live));
+      // Survivors are the exact negation of the slain predicate — NOT `hp > 0`.
+      // For a non-finite hp both `hp <= 0` and `hp > 0` are false, so `hp > 0`
+      // would silently drop a NaN-hp enemy; `!(hp <= 0)` keeps it (the same
+      // partition `slain` used). This negated-predicate filter also avoids the
+      // O(n*m) `slain.includes(live)` that coupled correctness to object
+      // identity surviving the upstream attack-resolution map.
+      enemies = enemies.filter(({ enemy }) => !(enemy.hp <= 0));
       const awarded = slain.reduce(
         (total, { enemy }) => total + xpForKill(enemy),
         0,
