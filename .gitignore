@@ -5,3 +5,6 @@ dist/
 coverage/
 .env
 .env.local
+
+# Claude Code background-agent worktrees (transient)
+.claude/worktrees/
