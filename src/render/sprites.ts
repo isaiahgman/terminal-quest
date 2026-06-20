@@ -40,6 +40,15 @@ export function glyphForTile(tile: Tile): Readonly<Glyph> {
 /** The player's glyph — high-contrast against every tile background. */
 export const PLAYER_GLYPH: Readonly<Glyph> = PALETTE.player;
 
+/**
+ * Foreground colours for the hit-feedback layer (TQ-015). A struck enemy briefly
+ * over-draws in {@link HIT_FLASH_COLOR}; floating damage numbers draw in
+ * {@link DAMAGE_NUMBER_COLOR}. Co-located with the palette so the juice shares the
+ * game's visual identity and nothing else hard-codes these colours.
+ */
+export const HIT_FLASH_COLOR = 'brightWhite';
+export const DAMAGE_NUMBER_COLOR = 'brightRed';
+
 /** A weapon-pickup glyph — drawn on its world tile beneath enemies/player. */
 export const PICKUP_GLYPH: Readonly<Glyph> = PALETTE.pickup;
 

@@ -294,6 +294,85 @@ describe('Renderer', () => {
     expect(recordedPuts(renderer).length).toBeGreaterThan(0);
   });
 
+  it('draws a floating damage number at a hit event location (TQ-015)', async () => {
+    const { Renderer } = await import('./renderer.js');
+    const { DAMAGE_NUMBER_COLOR } = await import('./sprites.js');
+    const { HUD_ROWS } = await import('./hud.js');
+
+    // Player at (1,1) in the 3x3 world (viewport == world, no camera offset). A
+    // hit landed on the enemy at (1,0) for 7 damage — not "big", so no shake.
+    const state: GameState = {
+      ...makeState(),
+      hitEvents: [{ pos: { x: 1, y: 0 }, amount: 7, big: false }],
+    };
+    const renderer = new Renderer();
+    renderer.render(state);
+
+    // The damage number's digits draw in the damage colour, in the world region
+    // above the HUD band (the HUD's HP bar shares the colour but lives below
+    // `playH`). With riseOffset 0 at spawn the number sits on the hit cell (1,0).
+    const playH = 8 - HUD_ROWS;
+    const numberPuts = recordedPuts(renderer).filter(
+      (p) => p.color === DAMAGE_NUMBER_COLOR && p.y < playH,
+    );
+    expect(numberPuts.map((p) => p.char).join('')).toBe('7');
+    expect(numberPuts[0]).toMatchObject({ x: 1, y: 0, char: '7' });
+  });
+
+  it('requests a screen shake on a big hit, offsetting the world viewport (TQ-015)', async () => {
+    const { Renderer } = await import('./renderer.js');
+    const { PLAYER_GLYPH } = await import('./sprites.js');
+    const { computeCamera } = await import('../game/world/camera.js');
+    const { HUD_ROWS } = await import('./hud.js');
+
+    const state: GameState = {
+      ...makeBigState(),
+      enemies: [],
+      // amount 4 ⇒ shake magnitude 1.2 ⇒ a rounded 1-cell kick at spawn.
+      hitEvents: [{ pos: { x: 12, y: 9 }, amount: 4, big: true }],
+    };
+    const renderer = new Renderer();
+    renderer.render(state);
+
+    const puts = recordedPuts(renderer);
+    const playH = 8 - HUD_ROWS;
+    const cam = computeCamera(state.player.pos, 8, playH, 20, 20);
+
+    // With a big hit the freshest shake offset is a non-zero 1-cell kick, so the
+    // player draws shifted off its un-shaken screen cell. (The fx overlay draws
+    // after the player now, so find the player glyph by char in the world band.)
+    const worldPuts = puts.filter((p) => p.y < playH);
+    const playerPut = worldPuts.filter((p) => p.char === PLAYER_GLYPH.char)[0]!;
+    expect(playerPut).toBeDefined();
+    const unshakenX = state.player.pos.x - cam.x;
+    const unshakenY = state.player.pos.y - cam.y;
+    const shifted = playerPut.x !== unshakenX || playerPut.y !== unshakenY;
+    expect(shifted).toBe(true);
+    // The kick is small — at most one cell on each axis.
+    expect(Math.abs(playerPut.x - unshakenX)).toBeLessThanOrEqual(1);
+    expect(Math.abs(playerPut.y - unshakenY)).toBeLessThanOrEqual(1);
+  });
+
+  it('draws no hit-feedback glyphs when there are no hit events (TQ-015)', async () => {
+    const { Renderer } = await import('./renderer.js');
+    const { DAMAGE_NUMBER_COLOR, HIT_FLASH_COLOR } =
+      await import('./sprites.js');
+
+    const { HUD_ROWS } = await import('./hud.js');
+    const renderer = new Renderer();
+    renderer.render(makeBigState()); // no hitEvents field
+
+    // No fx glyphs in the world region. (The HUD below `playH` reuses the same
+    // bright colours for its bars, so scope to the world viewport.)
+    const playH = 8 - HUD_ROWS;
+    const fxPuts = recordedPuts(renderer).filter(
+      (p) =>
+        p.y < playH &&
+        (p.color === DAMAGE_NUMBER_COLOR || p.color === HIT_FLASH_COLOR),
+    );
+    expect(fxPuts).toHaveLength(0);
+  });
+
   it('draws a weapon pickup on its tile, after the tile pass and below the player (TQ-010)', async () => {
     const { Renderer } = await import('./renderer.js');
     const { PICKUP_GLYPH, PLAYER_GLYPH, cellAttr } =

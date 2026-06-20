@@ -1,6 +1,7 @@
 import {
   type GameState,
   type GameStatus,
+  type HitEvent,
   type LiveEnemy,
   isWalkable,
 } from './state.js';
@@ -37,6 +38,15 @@ export const SIM_DT_SECONDS = SIM_DT / 1000;
 
 /** Stamina recovered per second of real time. A full bar (10) refills in ~3.3s. */
 export const STAMINA_REGEN_PER_SEC = 3;
+
+/**
+ * Damage at or above which a single landed hit is flagged "big" — the render
+ * layer (TQ-015) turns a big hit into a screen shake on top of the usual flash +
+ * floating number. Co-located here with the other balance knobs (per CLAUDE.md):
+ * it's pure presentation, never read back into the rules, so tuning it can only
+ * change how a hit *feels*, never what the sim does. Tune by playing.
+ */
+export const BIG_HIT_DAMAGE = 8;
 
 /**
  * The player's combat stats as the engine's {@link Combatant}: current hp /
@@ -156,6 +166,9 @@ export function update(
   let tooTired = false;
   let bossesDefeated = state.bossesDefeated ?? 0;
   let status: GameStatus = state.status ?? 'playing';
+  // Render-only hit feedback for this tick (TQ-015); populated below from the
+  // attack outcomes, then handed back on the returned state as pure OUTPUT.
+  let hitEvents: HitEvent[] = [];
 
   // --- Pickups: walking onto a weapon equips it to the single slot (TQ-010). ---
   // Done after the move (so the player must reach the tile) and before the attack
@@ -195,10 +208,25 @@ export function update(
       // each enemy by index (targets stay in input order).
       player = { ...player, stamina: result.attacker.stamina };
       if (enemies !== undefined) {
-        enemies = enemies.map((live, i) => ({
+        const struck = enemies;
+        enemies = struck.map((live, i) => ({
           ...live,
           enemy: { ...live.enemy, hp: result.targets[i]!.hp },
         }));
+        // Emit a render-only hit event per landed hit (TQ-015). Outcome `index`
+        // points back into the targets/enemies array (same order), so we read the
+        // struck enemy's pre-move position for the flash/number anchor. OUTPUT
+        // only — never read back, so the sim stays pure/deterministic.
+        hitEvents = result.outcomes
+          .filter((o) => o.hit)
+          .map((o): HitEvent => {
+            const pos = struck[o.index]!.enemy.pos;
+            return {
+              pos: { x: pos.x, y: pos.y },
+              amount: o.damage,
+              big: o.damage >= BIG_HIT_DAMAGE,
+            };
+          });
       }
     }
   }
@@ -295,6 +323,7 @@ export function update(
     tooTired,
     bossesDefeated,
     status,
+    hitEvents,
     tick: state.tick + 1,
   };
 }

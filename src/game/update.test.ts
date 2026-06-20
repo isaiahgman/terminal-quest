@@ -478,6 +478,78 @@ describe('update — risk/reward: low vs high attacks differ in play', () => {
   });
 });
 
+describe('update — render-only hit events (TQ-015 juice)', () => {
+  it('emits one hit event at the struck enemy with the rolled damage', () => {
+    // grunt adjacent at (2,1); quick-jab lands for base 2 + atk 3 = 5 (< 8, so
+    // not "big"). The event anchors at the enemy's pre-move cell.
+    const state = makeState({ enemies: [liveEnemy('grunt', 2, 1)] });
+    const next = update(
+      state,
+      [{ type: 'attack', attackId: 'quick-jab' }],
+      TICK,
+      scriptedRng([0]),
+    );
+    expect(next.hitEvents).toEqual([
+      { pos: { x: 2, y: 1 }, amount: 5, big: false },
+    ]);
+  });
+
+  it('flags a high-damage hit as "big" (the screen-shake trigger)', () => {
+    // brute at (5,7) below the player at (5,5), inside the maelstrom radius 4.
+    // base 10 + atk 3 = 13 ≥ BIG_HIT_DAMAGE → big. The 25-hp brute survives, so
+    // the event reflects a landed (not lethal) hit.
+    const state = makeState({
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveEnemy('brute', 5, 7)],
+    });
+    const next = update(
+      state,
+      [{ type: 'attack', attackId: 'whirling-maelstrom' }],
+      TICK,
+      scriptedRng([0]),
+    );
+    expect(next.hitEvents).toEqual([
+      { pos: { x: 5, y: 7 }, amount: 13, big: true },
+    ]);
+  });
+
+  it('emits no hit events on a miss, a block, or a tick with no attack', () => {
+    const enemies = [liveEnemy('grunt', 2, 1)];
+    const miss = update(
+      makeState({ enemies }),
+      [{ type: 'attack', attackId: 'quick-jab' }],
+      TICK,
+      scriptedRng([0.95]), // ≥ 0.9 hitChance → miss
+    );
+    expect(miss.hitEvents).toEqual([]);
+
+    const tired: Player = { ...createPlayer({ x: 1, y: 1 }), stamina: 0 };
+    const blocked = update(
+      makeState({ player: tired, enemies }),
+      [{ type: 'attack', attackId: 'quick-jab' }],
+      TICK,
+      noRng,
+    );
+    expect(blocked.hitEvents).toEqual([]);
+
+    const idle = update(makeState({ enemies }), [], TICK, noRng);
+    expect(idle.hitEvents).toEqual([]);
+  });
+
+  it('does not read hit events back into the rules (pure OUTPUT)', () => {
+    // A state carrying stale hitEvents must advance identically to one without:
+    // update writes hitEvents but never consumes them, so determinism holds.
+    const base = makeState({ enemies: [liveEnemy('grunt', 2, 1)] });
+    const withStale: GameState = {
+      ...base,
+      hitEvents: [{ pos: { x: 99, y: 99 }, amount: 999, big: true }],
+    };
+    const a = update(base, [], TICK, noRng);
+    const b = update(withStale, [], TICK, noRng);
+    expect({ ...b, hitEvents: a.hitEvents }).toEqual(a);
+  });
+});
+
 describe('update — attack reach (Euclidean radius vs the contact 8-ring)', () => {
   it('the jab reaches a diagonal neighbour — radius 1.5 covers the 8-ring', () => {
     // (2,2) is diagonally adjacent to the player at (1,1): Euclidean dist² = 2,

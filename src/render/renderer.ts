@@ -1,19 +1,33 @@
 import terminalKit from 'terminal-kit';
+import { performance } from 'node:perf_hooks';
 import { type GameState, tileAt } from '../game/state.js';
 import { computeCamera } from '../game/world/camera.js';
 import {
   cellAttr,
   glyphForTile,
+  DAMAGE_NUMBER_COLOR,
+  HIT_FLASH_COLOR,
   PICKUP_GLYPH,
   PLAYER_GLYPH,
 } from './sprites.js';
 import { HUD_ROWS, drawHud } from './hud.js';
+import {
+  type FxState,
+  advanceFx,
+  createFx,
+  riseOffset,
+  shakeOffset,
+  spawnHitFx,
+} from './fx.js';
 
 type Term = typeof terminalKit.terminal;
 
 /** DEC private mode 2026 — synchronized output, so a frame composites atomically. */
 const SYNC_ON = '\x1b[?2026h';
 export const SYNC_OFF = '\x1b[?2026l';
+
+/** Glyph over-drawn on a struck enemy's cell during its brief hit flash (TQ-015). */
+const FLASH_CHAR = '*';
 
 /**
  * Read-only renderer: draws a GameState into one full-screen ScreenBuffer and
@@ -29,6 +43,23 @@ export const SYNC_OFF = '\x1b[?2026l';
  */
 export class Renderer {
   private readonly screen: terminalKit.ScreenBuffer;
+
+  /**
+   * The persistent hit-feedback pool (TQ-015). The sim emits transient hit
+   * events on each GameState; the renderer owns the *effects* derived from them
+   * across frames — spawning on this frame's events, ageing the rest by the
+   * real-time gap since the last draw, and reading the derived shake offset. The
+   * fx module is pure (no RNG, no I/O); this field is the only mutable juice
+   * state and it lives entirely in the render layer, never in the sim.
+   */
+  private fx: FxState = createFx();
+
+  /**
+   * Wall-clock timestamp (ms) of the previous `render`, or `undefined` before
+   * the first frame. Effects age by the real elapsed gap so they feel the same
+   * regardless of how many sim ticks a frame batched.
+   */
+  private lastRenderMs: number | undefined;
 
   constructor(term: Term = terminalKit.terminal) {
     this.screen = new terminalKit.ScreenBuffer({
@@ -54,6 +85,56 @@ export class Renderer {
     this.screen.put({ x, y, attr, wrap: false, dx: 1, dy: 0 }, char);
   }
 
+  /**
+   * Draw the live hit-feedback effects (TQ-015) over the world viewport: each
+   * flash brightens its struck cell, each damage number draws its amount rising
+   * from the hit cell. `originX`/`originY` is the world coordinate that maps to
+   * screen cell (0,0) — i.e. the camera origin already shifted by the current
+   * shake — so fx track the same kicked viewport as the entities. Everything is
+   * clipped to the `[0,width) × [0,playH)` play area; shakes are not drawn (they
+   * are applied as the viewport offset, not as glyphs).
+   */
+  private drawFx(
+    originX: number,
+    originY: number,
+    width: number,
+    playH: number,
+  ): void {
+    for (const fx of this.fx.effects) {
+      if (fx.kind === 'flash') {
+        const sx = fx.pos.x - originX;
+        const sy = fx.pos.y - originY;
+        if (sx < 0 || sy < 0 || sx >= width || sy >= playH) continue;
+        // Over-draw the struck cell with a bright burst glyph so the enemy reads
+        // as "blinking" for the flash's brief lifetime.
+        this.putGlyph(
+          sx,
+          sy,
+          { color: HIT_FLASH_COLOR, bold: true },
+          FLASH_CHAR,
+        );
+      } else if (fx.kind === 'damage') {
+        // Rise upward (toward smaller y) as the number ages; round to a cell.
+        const sx = fx.pos.x - originX;
+        const sy = fx.pos.y - originY - Math.round(riseOffset(fx));
+        const text = String(fx.amount);
+        // Clip the whole label horizontally and the row vertically; draw left to
+        // right with no wrap so a number near the right edge truncates cleanly.
+        if (sy < 0 || sy >= playH || sx >= width) continue;
+        for (let i = 0; i < text.length; i++) {
+          const cx = sx + i;
+          if (cx < 0 || cx >= width) continue;
+          this.putGlyph(
+            cx,
+            sy,
+            { color: DAMAGE_NUMBER_COLOR, bold: true },
+            text[i]!,
+          );
+        }
+      }
+    }
+  }
+
   render(state: GameState): void {
     const { width, height } = this.screen;
     // Reserve the bottom `HUD_ROWS` for the HUD and pan the world inside the
@@ -67,6 +148,18 @@ export class Renderer {
       state.world.width,
       state.world.height,
     );
+
+    // --- Juice (TQ-015): age the effect pool by the real-time gap since the
+    // last frame, then ingest this tick's hit events. Read-only w.r.t. state —
+    // `hitEvents` is pure sim OUTPUT we never write back. The shake offset shifts
+    // the whole world viewport (tiles + entities + fx) by a cell on a big hit.
+    const now = performance.now();
+    if (this.lastRenderMs !== undefined) {
+      this.fx = advanceFx(this.fx, (now - this.lastRenderMs) / 1000);
+    }
+    this.lastRenderMs = now;
+    this.fx = spawnHitFx(this.fx, state.hitEvents ?? []);
+    const shake = shakeOffset(this.fx);
 
     // One reusable put-options object for the viewport cell loop, so the hot
     // loop allocates nothing per cell regardless of viewport size. Every glyph
@@ -82,9 +175,16 @@ export class Renderer {
       dx: 1,
       dy: 0,
     };
+    // Sample the world offset by `-shake` so the visible content slides by
+    // `+shake` while the draw positions stay inside the buffer (no off-buffer
+    // puts, no gaps): a 1-cell screen shake reads as the world kicking, not the
+    // frame tearing. With no live shake, `shake` is {0,0} and this is the
+    // original tile pass exactly.
     for (let sy = 0; sy < playH; sy++) {
       for (let sx = 0; sx < width; sx++) {
-        const g = glyphForTile(tileAt(state.world, cam.x + sx, cam.y + sy));
+        const g = glyphForTile(
+          tileAt(state.world, cam.x + sx - shake.x, cam.y + sy - shake.y),
+        );
         cellOpts.x = sx;
         cellOpts.y = sy;
         cellOpts.attr.color = g.color;
@@ -98,8 +198,8 @@ export class Renderer {
     // player steps on, so the only overlap is an enemy passing over). Skip any
     // outside the viewport. (TQ-010)
     for (const pickup of state.pickups ?? []) {
-      const px = pickup.pos.x - cam.x;
-      const py = pickup.pos.y - cam.y;
+      const px = pickup.pos.x - cam.x + shake.x;
+      const py = pickup.pos.y - cam.y + shake.y;
       if (px < 0 || py < 0 || px >= width || py >= playH) continue;
       this.screen.put(
         {
@@ -119,8 +219,8 @@ export class Renderer {
     // so the renderer stays data-driven — no per-kind switch here. Skip any that
     // fall outside the viewport.
     for (const { enemy } of state.enemies ?? []) {
-      const ex = enemy.pos.x - cam.x;
-      const ey = enemy.pos.y - cam.y;
+      const ex = enemy.pos.x - cam.x + shake.x;
+      const ey = enemy.pos.y - cam.y + shake.y;
       if (ex < 0 || ey < 0 || ex >= width || ey >= playH) continue;
       this.putGlyph(
         ex,
@@ -133,13 +233,20 @@ export class Renderer {
     // Cull the player against the play area too (symmetry with enemies above),
     // so a degenerate viewport — e.g. `playH === 0` on a terminal too short for
     // the world — never paints the player glyph into the HUD band.
-    const px = state.player.pos.x - cam.x;
-    const py = state.player.pos.y - cam.y;
+    const px = state.player.pos.x - cam.x + shake.x;
+    const py = state.player.pos.y - cam.y + shake.y;
     if (px >= 0 && py >= 0 && px < width && py < playH) {
       this.putGlyph(px, py, cellAttr(PLAYER_GLYPH, true), PLAYER_GLYPH.char);
     }
 
-    // The HUD owns the reserved band below the world viewport.
+    // --- Hit-feedback overlay (TQ-015): flashes over struck enemies, then the
+    // floating damage numbers, drawn on top of the world but below the HUD band.
+    // Anchored in world cells (camera- and shake-relative, like the entities)
+    // and clipped to the play area.
+    this.drawFx(cam.x - shake.x, cam.y - shake.y, width, playH);
+
+    // The HUD owns the reserved band below the world viewport. The HUD never
+    // shakes — only the world viewport above it does — so it ignores `shake`.
     drawHud(this.screen, state, playH, width);
 
     process.stdout.write(SYNC_ON);

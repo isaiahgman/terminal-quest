@@ -63,6 +63,24 @@ export interface Player {
 }
 
 /**
+ * A transient, render-only record of one hit landing this tick (TQ-015). The
+ * simulation writes these as pure OUTPUT each tick — the renderer reads them to
+ * spawn juice (flashes, floating damage numbers, screen shake). It is never read
+ * back into the rules, so the sim stays pure/deterministic: omitting or ignoring
+ * `hitEvents` changes nothing about how the next tick resolves. Plain data (a
+ * world cell + damage + a "big hit" flag), so it stays serializable and keeps the
+ * sim free of any render-layer import.
+ */
+export interface HitEvent {
+  /** Where the hit landed, in world cells (the struck enemy's position). */
+  pos: Vec2;
+  /** Damage dealt — shown as the floating number; also scales the shake. */
+  amount: number;
+  /** True for high-damage hits that should additionally shake the screen. */
+  big: boolean;
+}
+
+/**
  * A weapon lying on the ground for the player to walk onto and equip (TQ-010,
  * prd §7/F6). Plain data — a world position plus the `WeaponId` it grants — so
  * it stays serializable (TQ-012) and the renderer can draw it data-driven.
@@ -119,6 +137,15 @@ export interface GameState {
    * halt land in a later TQ-011 PR.
    */
   status?: GameStatus;
+  /**
+   * Render-only hit feedback emitted this tick (TQ-015): one entry per enemy that
+   * was actually struck by the player's swing, carrying the cell and damage shown.
+   * This is pure OUTPUT — {@link update} writes it but never reads it back, so it
+   * cannot influence the rules and determinism holds. Optional (mirrors
+   * `enemies?`/`pickups?` incremental wiring): a tick with no landed hit omits it,
+   * and a renderer that ignores it behaves exactly as before.
+   */
+  hitEvents?: readonly HitEvent[];
   /** Monotonic simulation tick counter (set by the loop in TQ-002). */
   tick: number;
 }
