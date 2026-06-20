@@ -628,6 +628,43 @@ describe('update — kill → XP hook (TQ-009)', () => {
     expect(next.player.progress?.level).toBe(2);
   });
 
+  it('refills hp/stamina to the new ceilings on level-up (TQ-023)', () => {
+    // A damaged player whose kill crosses a level threshold comes out topped up
+    // to the *new* (higher) caps — the level-up surge, not just added headroom.
+    const reward = xpForKill({ maxHp: 25, atk: 5 }); // brute — worth ≥ one level
+    expect(reward).toBeGreaterThanOrEqual(xpToNext(1));
+
+    const hurt: Player = { ...createPlayer({ x: 1, y: 1 }), hp: 4, stamina: 1 };
+    const next = update(
+      makeState({ player: hurt, enemies: [deadEnemy('brute', 1, 1)] }),
+      [],
+      TICK,
+      noRng,
+    );
+
+    const p = next.player.progress!;
+    expect(p.level).toBe(2);
+    expect(next.player.hp).toBe(p.maxHp); // fully refilled to the new cap
+    expect(next.player.stamina).toBe(p.maxStamina);
+  });
+
+  it('does not refill on a kill that does not level you up (TQ-023)', () => {
+    // A single grunt is worth less than the first threshold: no level, no heal.
+    const reward = xpForKill({ maxHp: 10, atk: 2 }); // grunt
+    expect(reward).toBeLessThan(xpToNext(1));
+
+    const hurt: Player = { ...createPlayer({ x: 1, y: 1 }), hp: 4, stamina: 1 };
+    const next = update(
+      makeState({ player: hurt, enemies: [deadEnemy('grunt', 1, 1)] }),
+      [],
+      TICK,
+      noRng,
+    );
+
+    expect(next.player.progress?.level).toBe(1);
+    expect(next.player.hp).toBe(4); // unchanged — no level-up, no refill
+  });
+
   it('defaults a fresh progression for a player that had none', () => {
     const player: Player = { pos: { x: 1, y: 1 }, hp: 20, stamina: 10, def: 0 };
     const state = makeState({ player, enemies: [deadEnemy('grunt', 1, 1)] });
