@@ -556,6 +556,49 @@ describe('update — enemies are wired into the tick', () => {
   });
 });
 
+describe('update — player defeat (TQ-020)', () => {
+  it("flips status to 'defeat' when contact damage depletes the player's hp", () => {
+    const player: Player = { ...createPlayer({ x: 1, y: 1 }), hp: 3 };
+    const state = makeState({ player, enemies: [liveEnemy('brute', 2, 1)] }); // atk 5
+    const next = update(state, [], TICK, noRng);
+    expect(next.player.hp).toBe(0);
+    expect(next.status).toBe('defeat');
+  });
+
+  it("stays 'playing' while the player still has hp", () => {
+    const state = makeState({ enemies: [liveEnemy('grunt', 2, 1)] }); // atk 2, 20hp
+    const next = update(state, [], TICK, noRng);
+    expect(next.player.hp).toBe(18);
+    expect(next.status).toBe('playing');
+  });
+
+  it("keeps 'defeat' sticky across a later tick", () => {
+    const player: Player = { ...createPlayer({ x: 1, y: 1 }), hp: 3 };
+    const dead = update(
+      makeState({ player, enemies: [liveEnemy('brute', 2, 1)] }),
+      [],
+      TICK,
+      noRng,
+    );
+    expect(dead.status).toBe('defeat');
+    expect(update(dead, [], TICK, noRng).status).toBe('defeat');
+  });
+
+  it("never overrides a 'victory' set the same tick the player dies (you won)", () => {
+    // A run already 'victory' with the player simultaneously at lethal contact
+    // must stay 'victory': the terminal status is sticky and 'defeat' is only set
+    // while still 'playing'. Models clearing the last boss and dying in one tick.
+    const player: Player = { ...createPlayer({ x: 1, y: 1 }), hp: 3 };
+    const state: GameState = {
+      ...makeState({ player, enemies: [liveEnemy('brute', 2, 1)] }),
+      status: 'victory',
+    };
+    const next = update(state, [], TICK, noRng);
+    expect(next.player.hp).toBe(0);
+    expect(next.status).toBe('victory');
+  });
+});
+
 describe('update — kill → XP hook (TQ-009)', () => {
   it('removes a slain enemy (hp ≤ 0) and awards its XP to the player', () => {
     // Dead grunt on the player's cell (culled before it could bite); a live
