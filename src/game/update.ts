@@ -292,6 +292,17 @@ export function update(
     }
   }
 
+  // --- Defeat: hp depleted ends the run (TQ-020). Sticky like victory, and set
+  // only while still 'playing' so that clearing the last boss *this same tick*
+  // (a 'victory' set in the cull step above) is never overridden by a
+  // simultaneous contact death — if you won, you won. The visible defeat screen
+  // and the loop halt are a later TQ-020 PR; this is just the sim-side trigger,
+  // set-but-not-yet-presented exactly like 'victory'. (`<= 0` excludes a
+  // non-finite hp, matching the engine's NaN-fails-safe stance.) ---
+  if (status === 'playing' && player.hp <= 0) {
+    status = 'defeat';
+  }
+
   return {
     ...state,
     player,

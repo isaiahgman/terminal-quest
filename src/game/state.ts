@@ -19,10 +19,13 @@ export type Tile = 'floor' | 'wall';
 
 /**
  * Run status: `'playing'` normally, `'victory'` once every placed boss is
- * defeated (TQ-011). The visible win screen + loop halt land in a later TQ-011
- * PR; this flag is the sim-side trigger they react to.
+ * defeated (TQ-011), `'defeat'` once the player's hp reaches 0 (TQ-020). Both
+ * `'victory'` and `'defeat'` are terminal and sticky. The visible end screens +
+ * loop halt land in a later TQ-020 PR; this flag is the sim-side trigger they
+ * react to — set-but-not-yet-presented, the same incremental pattern victory
+ * already follows.
  */
-export type GameStatus = 'playing' | 'victory';
+export type GameStatus = 'playing' | 'victory' | 'defeat';
 
 export interface World {
   readonly width: number;
