@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { update, SIM_DT_SECONDS } from './update.js';
+import { update, BASE_HP_REGEN_PER_SEC, SIM_DT_SECONDS } from './update.js';
+import { type Base, BOSSES_PER_TIER, createBase } from './base.js';
 import {
   createPlayer,
   type GameState,
@@ -10,7 +11,12 @@ import {
 } from './state.js';
 import { createEnemy, type SwarmKind } from './enemy.js';
 import { createEnemyAi } from './entities.js';
-import { createProgression, xpForKill, xpToNext } from './progression.js';
+import {
+  BASE_HP,
+  createProgression,
+  xpForKill,
+  xpToNext,
+} from './progression.js';
 import type { RngFn } from './combat.js';
 import { createBoss, type BossSpec, TOTAL_BOSSES } from '../data/bosses.js';
 
@@ -1020,5 +1026,121 @@ describe('update — bosses & victory', () => {
     };
     const next = update(state, [], TICK, noRng);
     expect(next.enemies![0]!.enemy.speed).toBe(berserker.speed);
+  });
+});
+
+describe('update — home base (TQ-013)', () => {
+  /** A tier-1 home at (10, 10) in a 21×21 open field (safe radius 2). */
+  function homeState(opts: {
+    playerPos?: { x: number; y: number };
+    hp?: number;
+    enemies?: readonly LiveEnemy[];
+    growth?: Base;
+    bossesDefeated?: number;
+  }): GameState {
+    const player = createPlayer(opts.playerPos ?? { x: 10, y: 10 });
+    return {
+      world: openWorld(21, 21),
+      player: opts.hp === undefined ? player : { ...player, hp: opts.hp },
+      enemies: opts.enemies ?? [],
+      base: { pos: { x: 10, y: 10 }, growth: opts.growth ?? createBase() },
+      bossesDefeated: opts.bossesDefeated ?? 0,
+      tooTired: false,
+      tick: 0,
+    };
+  }
+
+  /** A slain (0-hp) boss for the cull step, mirroring the victory suite. */
+  function slainBoss(id: string, x: number, y: number): LiveEnemy {
+    const boss = createBoss(
+      {
+        id,
+        name: id,
+        hp: 100,
+        atk: 6,
+        def: 0,
+        speed: 3,
+        glyph: 'B',
+        color: 'red',
+        signature: { kind: 'none' },
+      },
+      { x, y },
+    );
+    return { enemy: { ...boss, hp: 0 }, ai: createEnemyAi() };
+  }
+
+  it('grows the base the tick enough bosses fall', () => {
+    const enemies = Array.from({ length: BOSSES_PER_TIER }, (_, i) =>
+      slainBoss(`b${String(i)}`, i, 0),
+    );
+    const next = update(homeState({ enemies }), [], TICK, noRng);
+    expect(next.base?.growth.tier).toBe(2);
+    expect(next.base?.growth.bossesDefeated).toBe(BOSSES_PER_TIER);
+  });
+
+  it('leaves the base untouched on a boss-less tick', () => {
+    const state = homeState({ enemies: [deadEnemy('grunt', 1, 1)] });
+    const next = update(state, [], TICK, noRng);
+    expect(next.base).toBe(state.base); // not even a fresh copy — untouched
+  });
+
+  it('enemies never set foot on home ground', () => {
+    // A runner charging straight at a player standing at home: it must pull up
+    // at the safe-zone edge (Chebyshev radius 2 of the base) and stay there,
+    // however long it waits.
+    let state = homeState({ enemies: [liveEnemy('runner', 10, 2)] });
+    for (let i = 0; i < 90; i++) {
+      state = update(state, [], TICK, noRng);
+      const pos = state.enemies![0]!.enemy.pos;
+      const cheb = Math.max(Math.abs(pos.x - 10), Math.abs(pos.y - 10));
+      expect(cheb).toBeGreaterThan(2);
+    }
+  });
+
+  it('contact damage does not land on a player inside the zone', () => {
+    // Enemy just outside the edge (7,10), player just inside it (8,10) —
+    // adjacent, which would chip hp anywhere else in the world.
+    const inside = homeState({
+      playerPos: { x: 8, y: 10 },
+      enemies: [liveEnemy('brute', 7, 10)],
+    });
+    const safe = update(inside, [], TICK, noRng);
+    expect(safe.player.hp).toBe(safe.player.progress!.maxHp);
+
+    // The same adjacency without a base chips the player — proving the
+    // exemption (not the geometry) is what kept them whole above.
+    const exposed: GameState = { ...inside, base: undefined };
+    const chipped = update(exposed, [], TICK, noRng);
+    expect(chipped.player.hp).toBeLessThan(chipped.player.progress!.maxHp);
+  });
+
+  it('hp regenerates on home ground, and only there', () => {
+    const home = update(homeState({ hp: 5 }), [], TICK, noRng);
+    expect(home.player.hp).toBeCloseTo(5 + BASE_HP_REGEN_PER_SEC * TICK, 10);
+
+    const away = update(
+      homeState({ hp: 5, playerPos: { x: 20, y: 20 } }),
+      [],
+      TICK,
+      noRng,
+    );
+    expect(away.player.hp).toBe(5);
+  });
+
+  it('regen tops out at the effective ceiling — progression + base buff', () => {
+    // A tier-2 home grants +HP_BONUS_PER_TIER headroom: a player at the bare
+    // progression ceiling keeps healing toward the buffed one…
+    const grown: Base = { tier: 2, bossesDefeated: 2 };
+    const buffed = update(
+      homeState({ hp: BASE_HP, growth: grown, bossesDefeated: 2 }),
+      [],
+      TICK,
+      noRng,
+    );
+    expect(buffed.player.hp).toBeGreaterThan(BASE_HP);
+
+    // …while at a tier-1 home the bare ceiling IS the cap: no drift past full.
+    const capped = update(homeState({ hp: BASE_HP }), [], TICK, noRng);
+    expect(capped.player.hp).toBe(BASE_HP);
   });
 });

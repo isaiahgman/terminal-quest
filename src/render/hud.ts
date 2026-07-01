@@ -12,6 +12,7 @@
 
 import { type GameState } from '../game/state.js';
 import { createProgression, xpToNext } from '../game/progression.js';
+import { baseHpBonus } from '../game/base.js';
 import { TOTAL_BOSSES } from '../data/bosses.js';
 import { WEAPONS } from '../data/weapons.js';
 
@@ -46,6 +47,8 @@ const TEXT_COLOR = 'white';
 const TIRED_COLOR = 'brightYellow';
 /** The equipped-weapon readout — bright cyan so the gear axis is easy to spot. */
 const WEAPON_COLOR = 'brightCyan';
+/** The base-tier readout — matches the home-ground palette (`sprites.ts`). */
+const BASE_COLOR = 'brightBlue';
 /** Blank padding cells carry no visible glyph, so their foreground is moot — a
  *  neutral name, kept decoupled from the bar palette. */
 const PAD_COLOR = 'gray';
@@ -176,6 +179,11 @@ export function drawHud(
 ): void {
   const { player, tooTired } = state;
   const progress = player.progress ?? createProgression();
+  // The hp ceiling includes the home base's tier buff (TQ-013), matching the
+  // effective ceiling the sim refills/regens toward — bar and sim never disagree.
+  const maxHp =
+    progress.maxHp +
+    (state.base === undefined ? 0 : baseHpBonus(state.base.growth));
   // Floor each current value once and feed the SAME number to both the bar and
   // the numeric readout, so the two can never disagree — e.g. a rounded "10/10"
   // sitting beside a bar that isn't full. hp is integer; stamina accrues
@@ -186,8 +194,8 @@ export function drawHud(
   // Row 0 — health.
   layoutRow(screen, top, width, [
     { text: 'HP ', color: LABEL_COLOR, bold: true },
-    ...barSegments(hp, progress.maxHp, HP_COLOR),
-    { text: ` ${hp}/${progress.maxHp}`, color: TEXT_COLOR },
+    ...barSegments(hp, maxHp, HP_COLOR),
+    { text: ` ${hp}/${maxHp}`, color: TEXT_COLOR },
   ]);
 
   // Row 1 — stamina, with the "too tired" cue when an attack was just blocked.
@@ -201,8 +209,8 @@ export function drawHud(
   }
   layoutRow(screen, top + 1, width, staminaRow);
 
-  // Row 2 — level, XP toward the next level, and boss progress.
-  layoutRow(screen, top + 2, width, [
+  // Row 2 — level, XP toward the next level, boss progress, gear, and home.
+  const statsRow: Segment[] = [
     { text: `Lv ${progress.level}`, color: LABEL_COLOR, bold: true },
     {
       text: `   XP ${progress.xp}/${xpToNext(progress.level)}`,
@@ -213,5 +221,12 @@ export function drawHud(
       color: TEXT_COLOR,
     },
     { text: `   ${weaponLabel(state)}`, color: WEAPON_COLOR },
-  ]);
+  ];
+  if (state.base !== undefined) {
+    statsRow.push({
+      text: `   Base T${state.base.growth.tier}`,
+      color: BASE_COLOR,
+    });
+  }
+  layoutRow(screen, top + 2, width, statsRow);
 }

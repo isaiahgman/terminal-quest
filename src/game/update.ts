@@ -3,8 +3,10 @@ import {
   type GameStatus,
   type HitEvent,
   type LiveEnemy,
+  inBase,
   isWalkable,
 } from './state.js';
+import { baseHpBonus, growBase } from './base.js';
 import {
   type Combatant,
   type RngFn,
@@ -38,6 +40,29 @@ export const SIM_DT_SECONDS = SIM_DT / 1000;
 
 /** Stamina recovered per second of real time. A full bar (10) refills in ~3.3s. */
 export const STAMINA_REGEN_PER_SEC = 3;
+
+/**
+ * Hp recovered per second while standing on home ground (TQ-013) — the base's
+ * "breather" made tangible: retreat home, catch your breath, wade back in.
+ * Deliberately gentle (a full level-1 bar takes ~10s) so the base is a
+ * recovery anchor, not an in-combat heal — enemies can't follow you in, so the
+ * cost of using it is the walk, not the risk.
+ */
+export const BASE_HP_REGEN_PER_SEC = 2;
+
+/**
+ * The player's effective max hp: the progression ceiling plus the home base's
+ * tier buff (TQ-013) — the one place the two growth axes meet. States without
+ * progression default the fresh level-1 ceiling (the usual idiom); states
+ * without a base get no bonus.
+ */
+function effectiveMaxHp(
+  player: GameState['player'],
+  base: GameState['base'],
+): number {
+  const ceiling = player.progress?.maxHp ?? createProgression().maxHp;
+  return ceiling + (base === undefined ? 0 : baseHpBonus(base.growth));
+}
 
 /**
  * Damage at or above which a single landed hit is flagged "big" — the render
@@ -166,6 +191,7 @@ export function update(
   let tooTired = false;
   let bossesDefeated = state.bossesDefeated ?? 0;
   let defeatedBossIds = state.defeatedBossIds;
+  let base = state.base;
   let status: GameStatus = state.status ?? 'playing';
   // Render-only hit feedback for this tick (TQ-015); populated below from the
   // attack outcomes, then handed back on the returned state as pure OUTPUT.
@@ -253,21 +279,6 @@ export function update(
         progress: gainXp(player.progress ?? createProgression(), awarded),
       };
 
-      // Level-up power surge (TQ-023): a level you earn must be *felt*, not just
-      // banked as headroom. `gainXp` raised the hp/stamina ceilings; on any level
-      // gain, refill current hp/stamina to the new caps so the HUD jumps and you
-      // come out of the grind measurably stronger (prd §2). Full-refill policy;
-      // a multi-level gain heals once, to the final caps. `atk` already applies
-      // live, so the offensive half of the surge needed nothing here.
-      const leveledTo = player.progress?.level ?? 1;
-      if (leveledTo > priorLevel) {
-        player = {
-          ...player,
-          hp: player.progress?.maxHp ?? player.hp,
-          stamina: player.progress?.maxStamina ?? player.stamina,
-        };
-      }
-
       // Bosses are slain through the same path as a normal enemy; count the
       // ones that fell this tick and declare victory once `TOTAL_BOSSES` (the
       // roster length — the same denominator the HUD shows) are down (TQ-011).
@@ -283,9 +294,34 @@ export function update(
       if (slainBossIds.length > 0) {
         bossesDefeated += slainBossIds.length;
         defeatedBossIds = [...(defeatedBossIds ?? []), ...slainBossIds];
+        // The home base grows on the same signal (TQ-013): settle its tier
+        // against the new count here — the only place the count rises — so the
+        // home visibly levels up the tick the boss falls. growBase is
+        // monotonic, so this only ever steps the base up.
+        if (base !== undefined) {
+          base = { ...base, growth: growBase(base.growth, bossesDefeated) };
+        }
         if (TOTAL_BOSSES > 0 && bossesDefeated >= TOTAL_BOSSES) {
           status = 'victory';
         }
+      }
+
+      // Level-up power surge (TQ-023): a level you earn must be *felt*, not just
+      // banked as headroom. `gainXp` raised the hp/stamina ceilings; on any level
+      // gain, refill current hp/stamina to the new caps so the HUD jumps and you
+      // come out of the grind measurably stronger (prd §2). Full-refill policy;
+      // a multi-level gain heals once, to the final caps. `atk` already applies
+      // live, so the offensive half of the surge needed nothing here. The hp
+      // ceiling includes the base's tier buff (TQ-013); this runs after the
+      // boss/base block so a boss kill that levels you refills to the ceiling
+      // the kill just grew.
+      const leveledTo = player.progress?.level ?? 1;
+      if (leveledTo > priorLevel) {
+        player = {
+          ...player,
+          hp: effectiveMaxHp(player, base),
+          stamina: player.progress?.maxStamina ?? player.stamina,
+        };
       }
     }
   }
@@ -299,8 +335,14 @@ export function update(
 
   // --- Survivors advance toward the player's new position. ---
   if (enemies !== undefined) {
+    // Home ground is impassable to enemies (TQ-013): the safe zone is enforced
+    // where they *step*, so the swarm parts around the base rather than needing
+    // a bespoke AI mode. An enemy the growing zone swallows can still step OUT
+    // (its target tile is outside), so nothing gets permanently entombed.
+    const home = base; // narrow once for the closure
     const walkable = (ex: number, ey: number): boolean =>
-      isWalkable(state.world, ex, ey);
+      isWalkable(state.world, ex, ey) &&
+      (home === undefined || !inBase(home, ex, ey));
     enemies = enemies.map((live): LiveEnemy => {
       const next = stepEnemy(
         steppingEnemy(live.enemy),
@@ -320,12 +362,33 @@ export function update(
     // invariant while SIM_DT is fixed. A dt-scaled rate was rejected — it can't
     // reproduce today's exact integer damage in IEEE-754. See contactDamage in
     // entities.ts; revisit both if SIM_DT ever becomes tunable.
-    let contact = 0;
-    for (const { enemy } of enemies) {
-      contact += contactDamage(enemy, player.pos);
+    // No contact damage lands on home ground (TQ-013) — enemies can't enter the
+    // zone, but one standing just outside its edge is still adjacent to a player
+    // standing just inside; the exemption is what makes the base actually safe.
+    const playerHome =
+      base !== undefined && inBase(base, player.pos.x, player.pos.y);
+    if (!playerHome) {
+      let contact = 0;
+      for (const { enemy } of enemies) {
+        contact += contactDamage(enemy, player.pos);
+      }
+      if (contact > 0) {
+        player = { ...player, hp: Math.max(0, player.hp - contact) };
+      }
     }
-    if (contact > 0) {
-      player = { ...player, hp: Math.max(0, player.hp - contact) };
+  }
+
+  // --- Home ground heals (TQ-013): the breather, made tangible. Gentle regen
+  // toward the effective ceiling (progression + base buff); safe because the
+  // zone already blocks entry and contact, so this can never tug against
+  // same-tick damage. ---
+  if (base !== undefined && inBase(base, player.pos.x, player.pos.y)) {
+    const ceiling = effectiveMaxHp(player, base);
+    if (player.hp < ceiling) {
+      player = {
+        ...player,
+        hp: Math.min(ceiling, player.hp + BASE_HP_REGEN_PER_SEC * dt),
+      };
     }
   }
 
@@ -348,6 +411,7 @@ export function update(
     tooTired,
     bossesDefeated,
     defeatedBossIds,
+    base,
     status,
     hitEvents,
     tick: state.tick + 1,

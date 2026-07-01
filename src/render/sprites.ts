@@ -26,6 +26,13 @@ const PALETTE = {
   player: { char: '@', color: 'brightYellow', bg: 'black' },
   /** A weapon lying on the ground (TQ-010) — a bright cyan marker to walk onto. */
   pickup: { char: '↑', color: 'brightCyan', bg: 'black' },
+  /**
+   * Home ground (TQ-013) — the base's safe area. A calm cool-blue floor so the
+   * zone reads at a glance as "different, and safer" against the grey world.
+   */
+  baseFloor: { char: '·', color: 'brightBlue', bg: 'black' },
+  /** The hearth at the base's center — the landmark you walk home toward. */
+  baseHeart: { char: '⌂', color: 'brightCyan', bg: 'black' },
 } as const satisfies Record<string, Glyph>;
 
 export function glyphForTile(tile: Tile): Readonly<Glyph> {
@@ -51,6 +58,12 @@ export const DAMAGE_NUMBER_COLOR = 'brightRed';
 
 /** A weapon-pickup glyph — drawn on its world tile beneath enemies/player. */
 export const PICKUP_GLYPH: Readonly<Glyph> = PALETTE.pickup;
+
+/** Floor glyph for tiles inside the home base's safe area (TQ-013). */
+export const BASE_FLOOR_GLYPH: Readonly<Glyph> = PALETTE.baseFloor;
+
+/** The hearth glyph at the base's center tile (TQ-013). */
+export const BASE_HEART_GLYPH: Readonly<Glyph> = PALETTE.baseHeart;
 
 /**
  * Build a terminal-kit cell attribute from a glyph. `bgColor` is included only

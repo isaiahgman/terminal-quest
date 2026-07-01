@@ -1,10 +1,12 @@
 import terminalKit from 'terminal-kit';
 import { performance } from 'node:perf_hooks';
-import { type GameState, tileAt } from '../game/state.js';
+import { type GameState, inBase, tileAt } from '../game/state.js';
 import { computeCamera } from '../game/world/camera.js';
 import {
   cellAttr,
   glyphForTile,
+  BASE_FLOOR_GLYPH,
+  BASE_HEART_GLYPH,
   DAMAGE_NUMBER_COLOR,
   HIT_FLASH_COLOR,
   PICKUP_GLYPH,
@@ -180,16 +182,39 @@ export class Renderer {
     // puts, no gaps): a 1-cell screen shake reads as the world kicking, not the
     // frame tearing. With no live shake, `shake` is {0,0} and this is the
     // original tile pass exactly.
+    const home = state.base;
     for (let sy = 0; sy < playH; sy++) {
       for (let sx = 0; sx < width; sx++) {
-        const g = glyphForTile(
-          tileAt(state.world, cam.x + sx - shake.x, cam.y + sy - shake.y),
-        );
+        const wx = cam.x + sx - shake.x;
+        const wy = cam.y + sy - shake.y;
+        const tile = tileAt(state.world, wx, wy);
+        // Home ground (TQ-013): floor inside the base's safe area draws in the
+        // base palette, so the zone — and its growth, tier by tier — is visible
+        // at a glance. Walls keep their look; only the ground is home.
+        const g =
+          home !== undefined && tile === 'floor' && inBase(home, wx, wy)
+            ? BASE_FLOOR_GLYPH
+            : glyphForTile(tile);
         cellOpts.x = sx;
         cellOpts.y = sy;
         cellOpts.attr.color = g.color;
         cellOpts.attr.bgColor = g.bg ?? '';
         this.screen.put(cellOpts, g.char);
+      }
+    }
+
+    // The hearth at the base's center (TQ-013) — the landmark you navigate home
+    // by. Drawn like a pickup: over the tiles, under everything that moves.
+    if (home !== undefined) {
+      const hx = home.pos.x - cam.x + shake.x;
+      const hy = home.pos.y - cam.y + shake.y;
+      if (hx >= 0 && hy >= 0 && hx < width && hy < playH) {
+        this.putGlyph(
+          hx,
+          hy,
+          cellAttr(BASE_HEART_GLYPH, true),
+          BASE_HEART_GLYPH.char,
+        );
       }
     }
 
