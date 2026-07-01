@@ -7,8 +7,9 @@
  *
  * The schema is **versioned**; v2 (TQ-022) added the fields prd §8 always
  * required beyond v1's player/world/tick — the defeated-boss ids and the run
- * `status` — and v1 saves still load via a tolerant upgrade (defaults for the
- * new fields) so nobody's progress is lost to the bump.
+ * `status`. Version mismatches (older OR newer) load as "no save" → a fresh
+ * game: the recorded TQ-022 decision is a **hard reset on version bump**, no
+ * tolerant loader — one strict schema per build, no migration surface.
  *
  * Deliberate non-goal (TQ-022 decision #3): the combat RNG stream is **not**
  * persisted, even though `rng.ts` ships `getState`/`setState`. Enemies and
@@ -45,11 +46,10 @@ import { WEAPONS, type WeaponId } from '../data/weapons.js';
 
 /**
  * Save-format version. Bump when the shape changes incompatibly; {@link
- * parseSave} rejects any save whose `version` it can't handle, so an unknown
- * save loads as "no save" (new game) rather than mis-parsing into a broken
- * state. Known *older* versions are upgraded in place instead of rejected
- * (see {@link upgradeSave}) — a bump must never cost a player their progress
- * when the new fields have safe defaults.
+ * parseSave} rejects any save whose `version` differs — older or newer — so it
+ * loads as "no save" (new game) rather than mis-parsing into a broken state.
+ * Hard reset on bump is the recorded TQ-022 decision (AUTONOMY-LOG): one
+ * strict schema per build, no migration surface to maintain or get wrong.
  */
 export const SAVE_VERSION = 2;
 
@@ -223,25 +223,6 @@ function isWeaponSlot(value: unknown): value is WeaponId | undefined {
   return value === undefined || (typeof value === 'string' && value in WEAPONS);
 }
 
-/**
- * Upgrade a save written by an older known version to the current shape, or
- * return the value unchanged. v1 → v2: the new fields default safely (no bosses
- * defeated, a playing run) — exactly the state every v1 save was actually in
- * scope to record — so a v1 player keeps their level/position/world across the
- * bump instead of being reset to a new game (TQ-022 decision #1).
- */
-function upgradeSave(value: unknown): unknown {
-  if (isRecord(value) && value.version === 1) {
-    return {
-      ...value,
-      version: 2,
-      defeatedBosses: [],
-      status: 'playing',
-    };
-  }
-  return value;
-}
-
 function isSaveData(value: unknown): value is SaveData {
   if (!isRecord(value) || value.version !== SAVE_VERSION) return false;
 
@@ -275,10 +256,7 @@ function isSaveData(value: unknown): value is SaveData {
   return isNonNegativeInteger(value.tick);
 }
 
-/**
- * Parse + validate save JSON. A known older version is upgraded in place first
- * ({@link upgradeSave}); anything malformed or unknown-versioned returns `null`.
- */
+/** Parse + validate save JSON. Returns `null` for malformed or wrong-version data. */
 export function parseSave(text: string): SaveData | null {
   let parsed: unknown;
   try {
@@ -286,8 +264,7 @@ export function parseSave(text: string): SaveData | null {
   } catch {
     return null;
   }
-  const upgraded = upgradeSave(parsed);
-  return isSaveData(upgraded) ? upgraded : null;
+  return isSaveData(parsed) ? parsed : null;
 }
 
 // --- File I/O -----------------------------------------------------------------
