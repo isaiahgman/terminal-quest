@@ -218,10 +218,26 @@ export function update(
         (total, { enemy }) => total + xpForKill(enemy),
         0,
       );
+      const priorLevel = player.progress?.level ?? 1;
       player = {
         ...player,
         progress: gainXp(player.progress ?? createProgression(), awarded),
       };
+
+      // Level-up power surge (TQ-023): a level you earn must be *felt*, not just
+      // banked as headroom. `gainXp` raised the hp/stamina ceilings; on any level
+      // gain, refill current hp/stamina to the new caps so the HUD jumps and you
+      // come out of the grind measurably stronger (prd §2). Full-refill policy;
+      // a multi-level gain heals once, to the final caps. `atk` already applies
+      // live, so the offensive half of the surge needed nothing here.
+      const leveledTo = player.progress?.level ?? 1;
+      if (leveledTo > priorLevel) {
+        player = {
+          ...player,
+          hp: player.progress?.maxHp ?? player.hp,
+          stamina: player.progress?.maxStamina ?? player.stamina,
+        };
+      }
 
       // Bosses are slain through the same path as a normal enemy; count the
       // ones that fell this tick and declare victory once `TOTAL_BOSSES` (the
@@ -263,10 +279,11 @@ export function update(
     });
 
     // --- Contact damage: adjacent enemies chip the player (floored at 0). ---
-    // NB: contactDamage is flat-per-tick (TQ-005 contract, entities.ts), unlike
-    // the dt-scaled movement/regen above — so its effective DPS scales with the
-    // tick rate. Fine while the tick rate is fixed; reconcile when death/HUD
-    // lands (TQ-008).
+    // contactDamage is flat-per-tick by design (TQ-023): unlike the dt-scaled
+    // movement/regen above, contact DPS is `atk × tickRate`, an accepted
+    // invariant while SIM_DT is fixed. A dt-scaled rate was rejected — it can't
+    // reproduce today's exact integer damage in IEEE-754. See contactDamage in
+    // entities.ts; revisit both if SIM_DT ever becomes tunable.
     let contact = 0;
     for (const { enemy } of enemies) {
       contact += contactDamage(enemy, player.pos);

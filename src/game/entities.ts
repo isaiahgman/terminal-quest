@@ -204,6 +204,15 @@ export function stepEnemy(
  * ≤ 1), otherwise 0. This is the "standing still gets you swarmed and chipped
  * down" pressure (prd §5); per the artifact, a flat per-tick contact hit is
  * sufficient here — stamina-gated, probabilistic combat lands in TQ-006/007.
+ *
+ * **Intentionally flat per tick, NOT `dt`-scaled** (TQ-023 decision). It is the
+ * one mover that doesn't scale by `dt`, so effective contact DPS is
+ * `atk × tickRate` and would change if the tick rate did. That's an accepted
+ * invariant while `SIM_DT` is fixed: a `dt`-scaled rate (`atk × RATE × dt`) was
+ * considered and rejected because it can't reproduce today's exact integer
+ * damage in IEEE-754 (`atk × 15 × (1/15) ≠ atk`), trading clean integer hp for
+ * tick-independence the game never exercises. If `SIM_DT` ever becomes tunable,
+ * revisit here and at the contact-damage call site in `update.ts`.
  */
 export function contactDamage(enemy: Enemy, playerPos: Vec2): number {
   return chebyshev(enemy.pos, playerPos) <= 1 ? enemy.atk : 0;
