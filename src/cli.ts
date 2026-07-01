@@ -80,12 +80,24 @@ function spawnEnemies(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
  * the sim. Deterministic from the injected {@link Rng} (seeded off the world
  * seed), like {@link spawnEnemies}; bosses are spaced far from the player and each
  * other by {@link placeBosses}, not scattered as a swarm.
+ *
+ * Bosses in `defeated` (restored from the save, TQ-022) are dropped AFTER
+ * placement — placement consumes the RNG for the whole roster either way, so the
+ * survivors keep the exact seeded positions a fresh run would give them, and a
+ * defeated boss stays dead instead of respawning for a double-counted re-kill.
  */
-function spawnBosses(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
-  return placeBosses(world, player, rng).map((boss) => ({
-    enemy: boss,
-    ai: createEnemyAi(),
-  }));
+function spawnBosses(
+  world: World,
+  player: Vec2,
+  rng: Rng,
+  defeated: ReadonlySet<string>,
+): LiveEnemy[] {
+  return placeBosses(world, player, rng)
+    .filter((boss) => !defeated.has(boss.id))
+    .map((boss) => ({
+      enemy: boss,
+      ai: createEnemyAi(),
+    }));
 }
 
 /** The player's level, defaulting to 1 for pre-progression states. */
@@ -205,19 +217,23 @@ async function main(): Promise<void> {
   }
   // Bosses are the win condition (prd §7/F7): place the full roster as live
   // enemies alongside the swarm so they move/fight/render via the shared paths
-  // and the run is winnable. Like the swarm, they respawn from the seed each load
-  // (enemies aren't persisted), so the roster is always present on a resume too.
-  // NOTE: defeat progress isn't persisted yet either — `bossesDefeated` is absent
-  // from SaveData (SAVE_VERSION=1), so a resume restarts the win count at 0/N with
-  // the full roster respawned. Persisting it is deferred to a later save bump
-  // (tracked for TQ-012); until then a quit-and-resume erases boss progress.
+  // and the run is winnable. Like the swarm, they respawn from the seed each
+  // load (enemies aren't persisted) — but *defeated* bosses stay dead: the save
+  // carries their ids (TQ-022), and they're filtered out AFTER placement (so the
+  // survivors keep the exact seeded positions a fresh run would give them).
+  // Boss progress and run status restore with them, so a win streak — or a
+  // finished run — survives a relaunch (prd §8).
+  const defeated = new Set(save?.defeatedBosses ?? []);
   const state: GameState = {
     world,
     player,
     enemies: [
       ...spawnEnemies(world, player.pos, setupRng),
-      ...spawnBosses(world, player.pos, setupRng),
+      ...spawnBosses(world, player.pos, setupRng, defeated),
     ],
+    bossesDefeated: save === null ? undefined : save.defeatedBosses.length,
+    defeatedBossIds: save?.defeatedBosses,
+    status: save?.status,
     // Weapon pickups scattered from the same seeded RNG (TQ-010). Not persisted
     // by the save yet, so they reseed from the seed on resume — like the swarm.
     pickups: placeWeapons(world, player.pos, setupRng, WEAPON_COUNT),

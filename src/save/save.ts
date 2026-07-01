@@ -5,8 +5,17 @@
  * stats/level, and the tick. Enemies are *not* persisted: they respawn from the
  * seed on load (resume the *feel*, not the exact swarm — see the artifact).
  *
- * The schema is **versioned** so weapon (TQ-010) and bosses-defeated (TQ-011)
- * can be added later behind a version bump rather than a silent format break.
+ * The schema is **versioned**; v2 (TQ-022) added the fields prd §8 always
+ * required beyond v1's player/world/tick — the defeated-boss ids and the run
+ * `status` — and v1 saves still load via a tolerant upgrade (defaults for the
+ * new fields) so nobody's progress is lost to the bump.
+ *
+ * Deliberate non-goal (TQ-022 decision #3): the combat RNG stream is **not**
+ * persisted, even though `rng.ts` ships `getState`/`setState`. Enemies and
+ * pickups respawn from the world seed on load anyway — a resume reproduces the
+ * *feel*, not the exact frame — so persisting the roll stream would add schema
+ * surface for continuity the load path already doesn't offer. Revisit only if
+ * frame-exact combat continuity ever becomes a goal.
  *
  * This is the save layer (TDD §4) — the one sim-adjacent module that does file
  * I/O. Writes are **atomic** (write a unique temp file, then rename) so a crash
@@ -24,15 +33,24 @@ import {
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { type GameState, type Player, type Vec2 } from '../game/state.js';
+import {
+  type GameState,
+  type GameStatus,
+  type Player,
+  type Vec2,
+} from '../game/state.js';
 import { type Progression, createProgression } from '../game/progression.js';
+import { BOSS_ROSTER } from '../data/bosses.js';
 
 /**
  * Save-format version. Bump when the shape changes incompatibly; {@link
- * parseSave} rejects any save whose `version` differs, so an old save loads as
- * "no save" (new game) rather than mis-parsing into a broken state.
+ * parseSave} rejects any save whose `version` it can't handle, so an unknown
+ * save loads as "no save" (new game) rather than mis-parsing into a broken
+ * state. Known *older* versions are upgraded in place instead of rejected
+ * (see {@link upgradeSave}) — a bump must never cost a player their progress
+ * when the new fields have safe defaults.
  */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** The serialized, plain-JSON snapshot written to disk. */
 export interface SaveData {
@@ -50,6 +68,15 @@ export interface SaveData {
     readonly def: number;
     readonly progress: Progression;
   };
+  /**
+   * `id`s (from `data/bosses.ts`) of the bosses defeated so far — identity, not
+   * just a count, so the resume path can keep dead bosses dead (`cli.ts` filters
+   * them out of the respawned roster) and re-kills can never double-count toward
+   * victory. The on-screen count restores as `defeatedBosses.length`.
+   */
+  readonly defeatedBosses: readonly string[];
+  /** Run status — a finished run (victory/defeat) stays finished on resume. */
+  readonly status: GameStatus;
   readonly tick: number;
 }
 
@@ -72,6 +99,8 @@ export function serialize(state: GameState): SaveData {
       def: state.player.def,
       progress: { ...progress },
     },
+    defeatedBosses: [...(state.defeatedBossIds ?? [])],
+    status: state.status ?? 'playing',
     tick: state.tick,
   };
 }
@@ -136,8 +165,56 @@ function isProgression(value: unknown): value is Progression {
   );
 }
 
+/** The boss ids a save may legitimately claim as defeated — the roster's. */
+const KNOWN_BOSS_IDS: ReadonlySet<string> = new Set(
+  BOSS_ROSTER.map((spec) => spec.id),
+);
+
+/**
+ * Defeated-boss list: every entry a *known* roster id, no duplicates. Domain,
+ * not just type — an id the roster doesn't know (a hand-edit, or a save from a
+ * build whose roster shrank) can't be respawn-filtered or counted meaningfully,
+ * and a duplicate would inflate the restored count past what was earned.
+ */
+function isDefeatedBosses(value: unknown): value is readonly string[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (id): id is string => typeof id === 'string' && KNOWN_BOSS_IDS.has(id),
+    ) &&
+    new Set(value).size === value.length
+  );
+}
+
+function isGameStatus(value: unknown): value is GameStatus {
+  return value === 'playing' || value === 'victory' || value === 'defeat';
+}
+
+/**
+ * Upgrade a save written by an older known version to the current shape, or
+ * return the value unchanged. v1 → v2: the new fields default safely (no bosses
+ * defeated, a playing run) — exactly the state every v1 save was actually in
+ * scope to record — so a v1 player keeps their level/position/world across the
+ * bump instead of being reset to a new game (TQ-022 decision #1).
+ */
+function upgradeSave(value: unknown): unknown {
+  if (isRecord(value) && value.version === 1) {
+    return {
+      ...value,
+      version: 2,
+      defeatedBosses: [],
+      status: 'playing',
+    };
+  }
+  return value;
+}
+
 function isSaveData(value: unknown): value is SaveData {
   if (!isRecord(value) || value.version !== SAVE_VERSION) return false;
+
+  if (!isDefeatedBosses(value.defeatedBosses) || !isGameStatus(value.status)) {
+    return false;
+  }
 
   const world = value.world;
   if (
@@ -164,7 +241,10 @@ function isSaveData(value: unknown): value is SaveData {
   return isNonNegativeInteger(value.tick);
 }
 
-/** Parse + validate save JSON. Returns `null` for malformed or wrong-version data. */
+/**
+ * Parse + validate save JSON. A known older version is upgraded in place first
+ * ({@link upgradeSave}); anything malformed or unknown-versioned returns `null`.
+ */
 export function parseSave(text: string): SaveData | null {
   let parsed: unknown;
   try {
@@ -172,7 +252,8 @@ export function parseSave(text: string): SaveData | null {
   } catch {
     return null;
   }
-  return isSaveData(parsed) ? parsed : null;
+  const upgraded = upgradeSave(parsed);
+  return isSaveData(upgraded) ? upgraded : null;
 }
 
 // --- File I/O -----------------------------------------------------------------

@@ -120,6 +120,17 @@ export interface GameState {
    */
   bossesDefeated?: number;
   /**
+   * The `id`s (from `data/bosses.ts`) of the bosses defeated so far — the
+   * identity twin of {@link GameState.bossesDefeated}, appended in the same
+   * cull step so the two can never disagree (count === ids.length once wired).
+   * This is what lets a resume keep defeated bosses *dead*: the save persists
+   * these ids (TQ-022) and `cli.ts` filters them out of the respawned roster,
+   * instead of resurrecting every boss from the seed and letting re-kills
+   * double-count toward victory. Optional during incremental wiring, like its
+   * twin.
+   */
+  defeatedBossIds?: readonly string[];
+  /**
    * Weapon pickups lying in the world (TQ-010). Optional during incremental
    * wiring — a state with none omits it. Each tick {@link update} equips and
    * removes any pickup the player has stepped onto.
