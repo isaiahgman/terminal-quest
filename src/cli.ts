@@ -10,6 +10,7 @@ import {
 } from './game/state.js';
 import { type SwarmKind, createEnemy } from './game/enemy.js';
 import { createEnemyAi } from './game/entities.js';
+import { createBase, growBase } from './game/base.js';
 import { generateWorld } from './game/world/generate.js';
 import { Rng } from './game/rng.js';
 import {
@@ -202,6 +203,11 @@ async function main(): Promise<void> {
   // One RNG seeded off the world seed drives spawn placement; a second drives
   // the live sim (attack rolls) so combat reproduces alongside the world.
   const setupRng = new Rng(worldSeed);
+  // The home base (TQ-013) anchors where a fresh run begins: you start at home.
+  // Drawn from the seeded RNG before anything else so its tile — like the
+  // world — reproduces from the seed. (Persisting the base's grown state across
+  // sessions is the TQ-013 save slice, landing next.)
+  const homePos = pickSpawn(world, setupRng);
   let player: Player;
   if (save) {
     const restored = playerFromSave(save);
@@ -213,7 +219,7 @@ async function main(): Promise<void> {
       ? restored
       : { ...restored, pos: pickSpawn(world, setupRng) };
   } else {
-    player = createPlayer(pickSpawn(world, setupRng));
+    player = createPlayer(homePos);
   }
   // Bosses are the win condition (prd §7/F7): place the full roster as live
   // enemies alongside the swarm so they move/fight/render via the shared paths
@@ -233,6 +239,16 @@ async function main(): Promise<void> {
     ],
     bossesDefeated: save === null ? undefined : save.defeatedBosses.length,
     defeatedBossIds: save?.defeatedBosses,
+    // Home base (TQ-013): a fresh run starts at home — the base sits on the
+    // seeded spawn tile, its safe zone the newborn run's shelter. Its state
+    // persists the way the world does — by *derivation*, not storage: the tile
+    // reproduces from the seed (`homePos`), and the tier settles from the
+    // restored boss count (growth's single input). "Save the seed, not the
+    // tile array", applied to the home.
+    base: {
+      pos: { x: homePos.x, y: homePos.y },
+      growth: growBase(createBase(), save?.defeatedBosses.length ?? 0),
+    },
     status: save?.status,
     // Weapon pickups scattered from the same seeded RNG (TQ-010). Not persisted
     // by the save yet, so they reseed from the seed on resume — like the swarm.
