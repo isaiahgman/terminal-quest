@@ -19,6 +19,11 @@ export interface LoopHooks {
 /** Clamp on accumulated time so a GC pause can't trigger the "spiral of death". */
 const MAX_FRAME_MS = 250;
 
+/** A run is over once it reaches a terminal status (TQ-020) — halt the sim then. */
+function isOver(state: GameState): boolean {
+  return state.status === 'victory' || state.status === 'defeat';
+}
+
 /**
  * Fixed-timestep game loop. Advances the simulation in constant `SIM_DT` steps
  * (banking leftover time in an accumulator), then renders. Using a constant step
@@ -36,9 +41,19 @@ export function runLoop(initial: GameState, hooks: LoopHooks): void {
     }
 
     const now = performance.now();
-    acc += Math.min(now - last, MAX_FRAME_MS);
+    const elapsed = Math.min(now - last, MAX_FRAME_MS);
     last = now;
 
+    // Once the run is over (victory/defeat, TQ-020), freeze the simulation: bank
+    // no time and run no update, so enemies stop and the end screen stays put.
+    // Keep the loop alive at the frame cadence so quit (shouldStop) still works;
+    // the frame that ended the run already rendered it, so nothing to redraw.
+    if (isOver(state)) {
+      setTimeout(tick, SIM_DT);
+      return;
+    }
+
+    acc += elapsed;
     let advanced = false;
     // Drain once per simulation step, not once per frame: each fixed step is a
     // discrete tick of simulated time and must consume its own intents. The
@@ -54,6 +69,7 @@ export function runLoop(initial: GameState, hooks: LoopHooks): void {
       state = update(state, intents, SIM_DT_SECONDS, hooks.rng);
       acc -= SIM_DT;
       advanced = true;
+      if (isOver(state)) break; // ended this step — stop advancing immediately
     }
 
     if (advanced) hooks.render(state);

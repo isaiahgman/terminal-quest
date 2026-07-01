@@ -142,8 +142,61 @@ export class Renderer {
     // The HUD owns the reserved band below the world viewport.
     drawHud(this.screen, state, playH, width);
 
+    // A terminal run-end banner over the frozen frame (TQ-020): the loop halts
+    // the sim on victory/defeat, and this is its visible payoff. Drawn last so it
+    // sits on top of the world and HUD.
+    if (state.status === 'victory' || state.status === 'defeat') {
+      this.drawEndScreen(state.status, width, playH);
+    }
+
     process.stdout.write(SYNC_ON);
     this.screen.draw({ delta: true });
     process.stdout.write(SYNC_OFF);
+  }
+
+  /**
+   * Centered run-end banner: bold title (gold for victory, red for defeat) plus
+   * a quit hint, each line padded to a small block so it reads over the world
+   * rather than as scattered glyphs. Centered within the play area (not the HUD
+   * band) and clamped to the viewport, so a tiny terminal still draws sanely.
+   */
+  private drawEndScreen(
+    status: 'victory' | 'defeat',
+    width: number,
+    playH: number,
+  ): void {
+    const banner =
+      status === 'victory'
+        ? { lines: ['VICTORY', 'All bosses defeated'], color: 'brightYellow' }
+        : { lines: ['YOU DIED', ''], color: 'brightRed' };
+    const lines = [...banner.lines, 'press q to quit'];
+
+    const contentW = Math.max(...lines.map((l) => l.length));
+    const bannerW = Math.min(width, contentW + 2);
+    const x = Math.max(0, Math.floor((width - bannerW) / 2));
+    const top = Math.max(0, Math.floor((playH - lines.length) / 2));
+
+    lines.forEach((line, i) => {
+      const y = top + i;
+      if (y >= playH) return;
+      const left = Math.max(0, Math.floor((bannerW - line.length) / 2));
+      const text = (' '.repeat(left) + line).padEnd(bannerW).slice(0, bannerW);
+      const isTitle = i === 0;
+      this.screen.put(
+        {
+          x,
+          y,
+          attr: {
+            color: isTitle ? banner.color : 'white',
+            bold: isTitle,
+            bgColor: 'black',
+          },
+          wrap: false,
+          dx: 1,
+          dy: 0,
+        },
+        text,
+      );
+    });
   }
 }
