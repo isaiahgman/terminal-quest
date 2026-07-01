@@ -293,6 +293,31 @@ describe('drawHud — home base (TQ-013)', () => {
   });
 });
 
+describe('drawHud — dungeons (TQ-014)', () => {
+  const WIDTH = 60;
+
+  it('tags the stats row DUNGEON while below, and omits it on the surface', () => {
+    const below = new FakeScreen();
+    drawHud(
+      below,
+      makeState({
+        dungeon: {
+          returnPos: { x: 1, y: 1 },
+          exitPos: { x: 0, y: 0 },
+          overworld: { world: makeState().world },
+        },
+      }),
+      0,
+      WIDTH,
+    );
+    expect(rowText(below, 2, WIDTH)).toContain('DUNGEON');
+
+    const surface = new FakeScreen();
+    drawHud(surface, makeState(), 0, WIDTH);
+    expect(rowText(surface, 2, WIDTH)).not.toContain('DUNGEON');
+  });
+});
+
 describe('weaponLabel', () => {
   it('returns "Unarmed" for an empty slot', () => {
     expect(weaponLabel(makeState())).toBe('Unarmed');
