@@ -76,6 +76,21 @@ describe('runLoop', () => {
     expect(vi.getTimerCount()).toBe(1);
   });
 
+  it('freezes the sim once the run is over — no update steps (TQ-020)', () => {
+    const rec = recorder();
+    runLoop({ ...makeState(), status: 'defeat' }, rec);
+
+    // Pump many frames of time: an ended run must advance the sim zero times,
+    // so enemies stop and the end screen stays put (the loop stays alive only
+    // to keep honoring quit).
+    nowMs += 10 * SIM_DT;
+    vi.advanceTimersByTime(10 * SIM_DT);
+
+    expect(rec.drains).toBe(0); // never drained → never stepped update
+    expect(rec.lastTick).toBe(0); // still the initial state
+    expect(rec.renders).toBe(1); // only the initial frame
+  });
+
   it('advancing exactly SIM_DT runs update once and render once', () => {
     const rec = recorder();
     runLoop(makeState(), rec);

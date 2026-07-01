@@ -145,6 +145,32 @@ describe('Renderer', () => {
     expect(state).toEqual(snapshot);
   });
 
+  it('draws the defeat banner when the run is lost (TQ-020)', async () => {
+    const { Renderer } = await import('./renderer.js');
+    const renderer = new Renderer();
+    renderer.render({ ...makeState(), status: 'defeat' });
+    const drew = recordedPuts(renderer).map((p) => p.char);
+    expect(drew.some((t) => t.includes('YOU DIED'))).toBe(true);
+  });
+
+  it('draws the victory banner when the run is won (TQ-020/TQ-011)', async () => {
+    const { Renderer } = await import('./renderer.js');
+    const renderer = new Renderer();
+    renderer.render({ ...makeState(), status: 'victory' });
+    const drew = recordedPuts(renderer).map((p) => p.char);
+    expect(drew.some((t) => t.includes('VICTORY'))).toBe(true);
+  });
+
+  it('draws no end banner while the run is in progress', async () => {
+    const { Renderer } = await import('./renderer.js');
+    const renderer = new Renderer();
+    renderer.render(makeState()); // status undefined ⇒ playing
+    const drew = recordedPuts(renderer).map((p) => p.char);
+    expect(
+      drew.some((t) => t.includes('YOU DIED') || t.includes('VICTORY')),
+    ).toBe(false);
+  });
+
   it('draws each viewport cell with the tile glyph/colour at the camera offset', async () => {
     const { Renderer } = await import('./renderer.js');
     const { glyphForTile, cellAttr } = await import('./sprites.js');
