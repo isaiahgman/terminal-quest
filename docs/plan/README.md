@@ -65,6 +65,16 @@ Gaps an audit found between the PRD/TDD spec and tickets already marked **merged
 | [022](TQ-022-save-schema-v2.md) | Save schema v2: persist boss progress + run status (PRD §8) | 011, 012 |
 | [023](TQ-023-balance-reconciliation.md) | Balance reconciliation: level-up power surge + tick-independent contact damage | 005, 009 |
 
+## Phase 6 — Completion sweep (2026-07-01)
+
+The finish-the-project pass: with the engine, loop, and systems proven, the one
+remaining gap between the PRD's promises and the shipped game was content — the
+win condition said 10 bosses while the roster held 2, and no ticket owned the
+difference.
+| TQ | Title | Depends on |
+|----|-------|-----------|
+| [024](TQ-024-boss-roster.md) | Author the full 10-boss roster (pure data) | 011 |
+
 ## Dependency graph (spine)
 
 ```
