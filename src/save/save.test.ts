@@ -56,8 +56,27 @@ describe('serialize', () => {
         def: 2,
         progress: createProgression(),
       },
+      defeatedBosses: [],
+      status: 'playing',
       tick: 99,
     });
+  });
+
+  it('captures defeated-boss ids and run status (TQ-022)', () => {
+    const save = serialize({
+      ...makeState(),
+      bossesDefeated: 1,
+      defeatedBossIds: ['gatekeeper'],
+      status: 'victory',
+    });
+    expect(save.defeatedBosses).toEqual(['gatekeeper']);
+    expect(save.status).toBe('victory');
+  });
+
+  it('copies defeatedBossIds (no aliasing of the live state array)', () => {
+    const defeatedBossIds = ['gatekeeper'];
+    const save = serialize({ ...makeState(), defeatedBossIds });
+    expect(save.defeatedBosses).not.toBe(defeatedBossIds);
   });
 
   it('does not persist enemies (they respawn from the seed on load)', () => {
@@ -120,9 +139,34 @@ describe('parseSave rejects corrupt input (→ new game)', () => {
     expect(parseSave('"a string"')).toBeNull();
   });
 
-  it('returns null on a version mismatch', () => {
+  it('returns null on an unknown (newer) version', () => {
     const wrong = { ...valid, version: SAVE_VERSION + 1 };
     expect(parseSave(JSON.stringify(wrong))).toBeNull();
+  });
+
+  it('returns null for an unknown defeated-boss id', () => {
+    const bad = { ...valid, defeatedBosses: ['not-a-real-boss'] };
+    expect(parseSave(JSON.stringify(bad))).toBeNull();
+  });
+
+  it('returns null for duplicate defeated-boss ids (an inflated count)', () => {
+    const bad = { ...valid, defeatedBosses: ['gatekeeper', 'gatekeeper'] };
+    expect(parseSave(JSON.stringify(bad))).toBeNull();
+  });
+
+  it('returns null for a non-array defeatedBosses or non-string entries', () => {
+    expect(
+      parseSave(JSON.stringify({ ...valid, defeatedBosses: 'gatekeeper' })),
+    ).toBeNull();
+    expect(
+      parseSave(JSON.stringify({ ...valid, defeatedBosses: [42] })),
+    ).toBeNull();
+  });
+
+  it('returns null for a status outside the GameStatus union', () => {
+    for (const status of ['won', '', 42, null]) {
+      expect(parseSave(JSON.stringify({ ...valid, status }))).toBeNull();
+    }
   });
 
   it('returns null when a required section is missing', () => {
@@ -196,6 +240,43 @@ describe('parseSave rejects corrupt input (→ new game)', () => {
     for (const player of cases) {
       expect(parseSave(JSON.stringify({ ...valid, player }))).toBeNull();
     }
+  });
+});
+
+describe('v1 → v2 upgrade (tolerant loader, TQ-022)', () => {
+  /** A save exactly as v1 wrote it: no defeatedBosses, no status, version 1. */
+  function v1Save(): Record<string, unknown> {
+    const v2 = serialize(makeState()) as unknown as Record<string, unknown>;
+    const v1: Record<string, unknown> = { ...v2, version: 1 };
+    delete v1.defeatedBosses;
+    delete v1.status;
+    return v1;
+  }
+
+  it('loads a v1 save with the new fields defaulted (progress kept)', () => {
+    const upgraded = parseSave(JSON.stringify(v1Save()));
+    expect(upgraded).not.toBeNull();
+    expect(upgraded).toEqual({
+      ...v1Save(),
+      version: SAVE_VERSION,
+      defeatedBosses: [],
+      status: 'playing',
+    });
+  });
+
+  it('still rejects a corrupt v1 save (upgrade is not a bypass)', () => {
+    const bad = { ...v1Save(), player: null };
+    expect(parseSave(JSON.stringify(bad))).toBeNull();
+  });
+
+  it('boss progress survives a serialize → parse round trip (no reset)', () => {
+    const save = serialize({
+      ...makeState(),
+      bossesDefeated: 1,
+      defeatedBossIds: ['gatekeeper'],
+    });
+    const reloaded = parseSave(JSON.stringify(save));
+    expect(reloaded?.defeatedBosses).toEqual(['gatekeeper']);
   });
 });
 

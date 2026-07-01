@@ -165,6 +165,7 @@ export function update(
   let pickups = state.pickups;
   let tooTired = false;
   let bossesDefeated = state.bossesDefeated ?? 0;
+  let defeatedBossIds = state.defeatedBossIds;
   let status: GameStatus = state.status ?? 'playing';
   // Render-only hit feedback for this tick (TQ-015); populated below from the
   // attack outcomes, then handed back on the returned state as pure OUTPUT.
@@ -272,9 +273,16 @@ export function update(
       // roster length — the same denominator the HUD shows) are down (TQ-011).
       // Gated on a boss actually dying this tick, so a no-boss game never wins;
       // the `> 0` guard keeps an empty roster from auto-winning at 0/0.
-      const slainBosses = slain.filter(({ enemy }) => isBoss(enemy)).length;
-      if (slainBosses > 0) {
-        bossesDefeated += slainBosses;
+      // Identity is recorded alongside the count (`defeatedBossIds`, the
+      // count's twin — see `state.ts`), appended here and nowhere else, so the
+      // save can keep dead bosses dead across a resume (TQ-022).
+      const slainBossIds = slain
+        .map(({ enemy }) => enemy)
+        .filter(isBoss)
+        .map((boss) => boss.id);
+      if (slainBossIds.length > 0) {
+        bossesDefeated += slainBossIds.length;
+        defeatedBossIds = [...(defeatedBossIds ?? []), ...slainBossIds];
         if (TOTAL_BOSSES > 0 && bossesDefeated >= TOTAL_BOSSES) {
           status = 'victory';
         }
@@ -339,6 +347,7 @@ export function update(
     pickups,
     tooTired,
     bossesDefeated,
+    defeatedBossIds,
     status,
     hitEvents,
     tick: state.tick + 1,

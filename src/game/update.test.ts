@@ -857,6 +857,42 @@ describe('update — bosses & victory', () => {
     expect(next.status).toBe('playing'); // 1 < TOTAL_BOSSES
   });
 
+  it("records a slain boss's id alongside the count (TQ-022)", () => {
+    const state: GameState = {
+      world: openWorld(10, 10),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveBoss(wall, 2, 2, 0), deadEnemy('grunt', 8, 8)],
+      bossesDefeated: 0,
+      tooTired: false,
+      tick: 0,
+    };
+    const next = update(state, [], TICK, noRng);
+    // Identity twin of the count: only the boss's id, never the grunt's kind.
+    expect(next.defeatedBossIds).toEqual(['wall']);
+    expect(next.bossesDefeated).toBe(1);
+  });
+
+  it('appends to existing defeatedBossIds without dropping earlier kills', () => {
+    const state: GameState = {
+      world: openWorld(10, 10),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveBoss(berserker, 2, 2, 0)],
+      bossesDefeated: 1,
+      defeatedBossIds: ['wall'],
+      tooTired: false,
+      tick: 0,
+    };
+    const next = update(state, [], TICK, noRng);
+    expect(next.defeatedBossIds).toEqual(['wall', 'berserker']);
+    expect(next.bossesDefeated).toBe(2);
+  });
+
+  it('leaves defeatedBossIds untouched on a tick where no boss dies', () => {
+    const state = makeState({ enemies: [deadEnemy('grunt', 1, 1)] });
+    const next = update(state, [], TICK, noRng);
+    expect(next.defeatedBossIds).toBeUndefined();
+  });
+
   it('declares victory once the whole roster (TOTAL_BOSSES) is down', () => {
     // Pre-slain bosses, one per roster slot, all culled this tick → the count
     // reaches TOTAL_BOSSES and the run flips to victory. Generic over the roster
