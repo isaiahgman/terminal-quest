@@ -271,6 +271,20 @@ describe('placeWeapons', () => {
   });
 });
 
+describe('placeWeapons — excluded tiles (audit fix)', () => {
+  it('never drops a weapon on an excluded (entrance) tile', () => {
+    const world = openWorld(30);
+    const player = { x: 15, y: 15 };
+    const entrances = placeEntrances(world, player, new Rng(3), 3);
+    const pickups = placeWeapons(world, player, new Rng(3), 25, entrances);
+    for (const pickup of pickups) {
+      for (const door of entrances) {
+        expect(pickup.pos).not.toEqual(door);
+      }
+    }
+  });
+});
+
 describe('placeEntrances (TQ-014)', () => {
   const player = { x: 25, y: 25 };
 
