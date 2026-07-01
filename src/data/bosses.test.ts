@@ -59,3 +59,36 @@ describe('createBoss', () => {
     expect(boss.pos.x).toBe(1);
   });
 });
+
+describe('BOSS_ROSTER — the full ten (TQ-024)', () => {
+  it('holds exactly the 10 bosses the PRD promises (prd §7/F7)', () => {
+    expect(BOSS_ROSTER).toHaveLength(10);
+  });
+
+  it('ascends: each boss at least as tough (hp) as its predecessor', () => {
+    for (let i = 1; i < BOSS_ROSTER.length; i++) {
+      expect(BOSS_ROSTER[i]!.hp).toBeGreaterThanOrEqual(BOSS_ROSTER[i - 1]!.hp);
+    }
+  });
+
+  it('mixes signatures — the climb changes texture, not just magnitude', () => {
+    const kinds = new Set(BOSS_ROSTER.map((spec) => spec.signature.kind));
+    expect(kinds.has('none')).toBe(true);
+    expect(kinds.has('enrage')).toBe(true);
+  });
+
+  it('every enrage tuning is in domain (0 < below <= 1, multiplier > 1)', () => {
+    for (const spec of BOSS_ROSTER) {
+      if (spec.signature.kind === 'enrage') {
+        expect(spec.signature.below).toBeGreaterThan(0);
+        expect(spec.signature.below).toBeLessThanOrEqual(1);
+        expect(spec.signature.speedMultiplier).toBeGreaterThan(1);
+      }
+    }
+  });
+
+  it('glyphs are distinct so every boss reads uniquely on screen', () => {
+    const glyphs = BOSS_ROSTER.map((spec) => spec.glyph);
+    expect(new Set(glyphs).size).toBe(glyphs.length);
+  });
+});
