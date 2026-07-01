@@ -2,11 +2,14 @@ import { describe, it, expect } from 'vitest';
 import {
   pickSpawn,
   placeBosses,
+  placeEntrances,
   placeWeapons,
   walkableTiles,
   manhattan,
   BOSS_MIN_PLAYER_DISTANCE,
   BOSS_MIN_SEPARATION,
+  ENTRANCE_MIN_PLAYER_DISTANCE,
+  ENTRANCE_MIN_SEPARATION,
   WEAPON_MIN_PLAYER_DISTANCE,
 } from './spawn.js';
 import { isWalkable } from './state.js';
@@ -265,5 +268,55 @@ describe('placeWeapons', () => {
     tiles[0]![0] = 'floor';
     const world: World = { width: 3, height: 3, tiles, seed: 0 };
     expect(placeWeapons(world, player, new Rng(1), 5)).toEqual([]);
+  });
+});
+
+describe('placeEntrances (TQ-014)', () => {
+  const player = { x: 25, y: 25 };
+
+  it('places the requested count on distinct walkable tiles, spaced out', () => {
+    const world = openWorld(50);
+    const entrances = placeEntrances(world, player, new Rng(7), 3);
+    expect(entrances).toHaveLength(3);
+    const cells = new Set(entrances.map((e) => `${e.x},${e.y}`));
+    expect(cells.size).toBe(3);
+    for (const e of entrances) {
+      expect(isWalkable(world, e.x, e.y)).toBe(true);
+      expect(manhattan(e, player)).toBeGreaterThanOrEqual(
+        ENTRANCE_MIN_PLAYER_DISTANCE,
+      );
+    }
+    for (let i = 0; i < entrances.length; i++) {
+      for (let j = i + 1; j < entrances.length; j++) {
+        expect(manhattan(entrances[i]!, entrances[j]!)).toBeGreaterThanOrEqual(
+          ENTRANCE_MIN_SEPARATION,
+        );
+      }
+    }
+  });
+
+  it('is deterministic from the injected rng', () => {
+    const world = openWorld(50);
+    expect(placeEntrances(world, player, new Rng(7), 3)).toEqual(
+      placeEntrances(world, player, new Rng(7), 3),
+    );
+  });
+
+  it('degrades on a cramped world but never stacks or uses the player tile', () => {
+    const world = makeWorld(); // 5 floor tiles, 3×3 — spacing is impossible
+    const entrances = placeEntrances(world, { x: 1, y: 1 }, new Rng(1), 4);
+    expect(entrances.length).toBeGreaterThan(0);
+    expect(entrances.length).toBeLessThanOrEqual(4);
+    const cells = new Set(entrances.map((e) => `${e.x},${e.y}`));
+    expect(cells.size).toBe(entrances.length);
+    for (const e of entrances) {
+      expect(e).not.toEqual({ x: 1, y: 1 });
+      expect(isWalkable(world, e.x, e.y)).toBe(true);
+    }
+  });
+
+  it('returns empty for a zero count or an all-wall world', () => {
+    expect(placeEntrances(openWorld(50), player, new Rng(1), 0)).toEqual([]);
+    expect(placeEntrances(wallWorld(5), player, new Rng(1), 2)).toEqual([]);
   });
 });

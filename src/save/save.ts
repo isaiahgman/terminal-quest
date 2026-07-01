@@ -89,20 +89,31 @@ export interface SaveData {
   readonly tick: number;
 }
 
-/** Project the live {@link GameState} down to its serializable {@link SaveData}. */
+/**
+ * Project the live {@link GameState} down to its serializable {@link SaveData}.
+ *
+ * Dungeons (TQ-014): a save taken *inside* a dungeon records the suspended
+ * OVERWORLD with the player at the entrance they went down through — not the
+ * dungeon itself. Dungeons are transient, re-generable pockets (seed-derived,
+ * like everything), so "where you were" for a resume is the door you entered;
+ * everything player-bound (hp, level, weapon, loot) persists exactly as held
+ * mid-dungeon. This keeps the schema world-shaped and the resume path single.
+ */
 export function serialize(state: GameState): SaveData {
   // `progress` is optional on the player during incremental wiring; a fresh
   // level-1 progression is the same default the sim falls back to.
   const progress = state.player.progress ?? createProgression();
+  const world = state.dungeon?.overworld.world ?? state.world;
+  const pos = state.dungeon?.returnPos ?? state.player.pos;
   return {
     version: SAVE_VERSION,
     world: {
-      seed: state.world.seed,
-      width: state.world.width,
-      height: state.world.height,
+      seed: world.seed,
+      width: world.width,
+      height: world.height,
     },
     player: {
-      pos: { x: state.player.pos.x, y: state.player.pos.y },
+      pos: { x: pos.x, y: pos.y },
       hp: state.player.hp,
       stamina: state.player.stamina,
       def: state.player.def,

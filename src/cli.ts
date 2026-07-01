@@ -17,6 +17,7 @@ import {
   manhattan,
   pickSpawn,
   placeBosses,
+  placeEntrances,
   placeWeapons,
 } from './game/spawn.js';
 import { runLoop } from './game/loop.js';
@@ -46,6 +47,9 @@ const ENEMY_MIN_PLAYER_DISTANCE = 12;
 
 /** How many weapon pickups to scatter in a fresh world (TQ-010). */
 const WEAPON_COUNT = 5;
+
+/** How many dungeon entrances a world carries (TQ-014). */
+const ENTRANCE_COUNT = 3;
 
 /**
  * Scatter a handful of enemies on walkable ground, away from the player's spawn
@@ -253,6 +257,11 @@ async function main(): Promise<void> {
     // Weapon pickups scattered from the same seeded RNG (TQ-010). Not persisted
     // by the save yet, so they reseed from the seed on resume — like the swarm.
     pickups: placeWeapons(world, player.pos, setupRng, WEAPON_COUNT),
+    // Dungeon entrances (TQ-014): stable seeded landmarks, placed relative to
+    // the fixed home tile (not the player's current pos) and drawn LAST from
+    // the setup RNG, so the same seed puts the same doors in the same places
+    // on every launch — fresh or resumed.
+    entrances: placeEntrances(world, homePos, setupRng, ENTRANCE_COUNT),
     tooTired: false,
     tick: save?.tick ?? 0,
   };
