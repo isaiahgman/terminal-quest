@@ -674,14 +674,38 @@ describe('update — player defeat (TQ-020)', () => {
     expect(update(dead, [], TICK, noRng).status).toBe('defeat');
   });
 
-  it("never overrides a 'victory' set the same tick the player dies (you won)", () => {
-    // A run already 'victory' with the player simultaneously at lethal contact
-    // must stay 'victory': the terminal status is sticky and 'defeat' is only set
-    // while still 'playing'. Models clearing the last boss and dying in one tick.
-    const player: Player = { ...createPlayer({ x: 1, y: 1 }), hp: 3 };
+  it("never overrides a 'victory' earned the same tick the player dies (you won)", () => {
+    // The REAL same-tick race, from 'playing': the whole roster falls this
+    // tick (victory in the cull step) while an adjacent brute lands lethal
+    // contact (hp → 0). Defeat is gated on status === 'playing', so the win
+    // sticks. (An already-terminal state no longer ticks at all — the freeze
+    // guard — so the race can only be modeled from 'playing'.)
+    const world = openWorld(Math.max(TOTAL_BOSSES, 2) + 3, 4);
+    const slainRoster = Array.from({ length: TOTAL_BOSSES }, (_, i) => {
+      const boss = createBoss(
+        {
+          id: `slain${String(i)}`,
+          name: `slain${String(i)}`,
+          hp: 10,
+          atk: 1,
+          def: 0,
+          speed: 1,
+          glyph: 'B',
+          color: 'red',
+          signature: { kind: 'none' },
+        },
+        { x: i, y: 0 },
+      );
+      return { enemy: { ...boss, hp: 0 }, ai: createEnemyAi() };
+    });
+    const player: Player = { ...createPlayer({ x: 1, y: 2 }), hp: 3 };
     const state: GameState = {
-      ...makeState({ player, enemies: [liveEnemy('brute', 2, 1)] }),
-      status: 'victory',
+      world,
+      player,
+      enemies: [...slainRoster, liveEnemy('brute', 2, 2)],
+      bossesDefeated: 0,
+      tooTired: false,
+      tick: 0,
     };
     const next = update(state, [], TICK, noRng);
     expect(next.player.hp).toBe(0);
@@ -1154,6 +1178,109 @@ describe('update — home base (TQ-013)', () => {
     // …while at a tier-1 home the bare ceiling IS the cap: no drift past full.
     const capped = update(homeState({ hp: BASE_HP }), [], TICK, noRng);
     expect(capped.player.hp).toBe(BASE_HP);
+  });
+});
+
+describe('update — a finished run is inert (TQ-020 sim invariant)', () => {
+  it.each(['victory', 'defeat'] as const)(
+    'a %s state ticks without anyone moving, biting, or spending',
+    (status) => {
+      const state: GameState = {
+        world: openWorld(10, 10),
+        player: { ...createPlayer({ x: 5, y: 5 }), hp: 3 },
+        enemies: [liveEnemy('runner', 5, 4)], // adjacent — would bite if live
+        status,
+        tooTired: false,
+        tick: 7,
+      };
+      // Move + attack intents AND an adjacent enemy: all must be ignored, and
+      // noRng proves the dead tick consumes no randomness.
+      const next = update(
+        state,
+        [
+          { type: 'move', dx: 1, dy: 0 },
+          { type: 'attack', attackId: 'quick-jab' },
+        ],
+        TICK,
+        noRng,
+      );
+      expect(next.player.pos).toEqual({ x: 5, y: 5 });
+      expect(next.player.hp).toBe(3); // no contact chip
+      expect(next.player.stamina).toBe(state.player.stamina); // no spend/regen
+      expect(next.enemies![0]!.enemy.pos).toEqual({ x: 5, y: 4 });
+      expect(next.status).toBe(status);
+      expect(next.tick).toBe(8); // time passes; the dead run doesn't
+      expect(next.hitEvents).toEqual([]);
+    },
+  );
+});
+
+describe('update — stamina regen has no float-drift gate (audit fix)', () => {
+  it('exactly regenerated cost is spendable — ten 0.2 ticks buy a 2-cost jab', () => {
+    // Drain to 0, regen 10 ticks (nominally exactly 2.0, binary drift makes it
+    // 1.9999999999999998 unquantized), then jab: it must NOT be blocked.
+    let state: GameState = {
+      world: openWorld(10, 10),
+      player: { ...createPlayer({ x: 5, y: 5 }), stamina: 0 },
+      enemies: [],
+      tooTired: false,
+      tick: 0,
+    };
+    for (let i = 0; i < 10; i++) {
+      state = update(state, [], TICK, noRng);
+    }
+    expect(state.player.stamina).toBe(2); // exact, not 1.999…8
+    const next = update(
+      state,
+      [{ type: 'attack', attackId: 'quick-jab' }],
+      TICK,
+      noRng, // no enemies in radius ⇒ no rolls; blocked would set tooTired
+    );
+    expect(next.tooTired).toBe(false);
+  });
+});
+
+describe('update — base growth evicts swallowed enemies (audit fix)', () => {
+  it('an enemy inside the newly-grown ring is moved to the nearest outside tile', () => {
+    // Base at (10,10) tier 1 (radius 2). A grunt waits at (10,13) — outside.
+    // BOSSES_PER_TIER kills grow the base to tier 2 (radius 3), swallowing it.
+    const enemies: LiveEnemy[] = [
+      liveEnemy('grunt', 10, 13),
+      ...Array.from({ length: BOSSES_PER_TIER }, (_, i) => {
+        const boss = createBoss(
+          {
+            id: `b${String(i)}`,
+            name: `b${String(i)}`,
+            hp: 10,
+            atk: 1,
+            def: 0,
+            speed: 1,
+            glyph: 'B',
+            color: 'red',
+            signature: { kind: 'none' },
+          },
+          { x: i, y: 0 },
+        );
+        return { enemy: { ...boss, hp: 0 }, ai: createEnemyAi() };
+      }),
+    ];
+    const state: GameState = {
+      world: openWorld(21, 21),
+      player: createPlayer({ x: 10, y: 10 }),
+      enemies,
+      base: { pos: { x: 10, y: 10 }, growth: createBase() },
+      bossesDefeated: 0,
+      tooTired: false,
+      tick: 0,
+    };
+    const next = update(state, [], TICK, noRng);
+    expect(next.base?.growth.tier).toBe(2);
+    const grunt = next.enemies!.find(({ enemy }) => enemy.kind === 'grunt')!;
+    const cheb = Math.max(
+      Math.abs(grunt.enemy.pos.x - 10),
+      Math.abs(grunt.enemy.pos.y - 10),
+    );
+    expect(cheb).toBeGreaterThan(3); // outside the grown radius
   });
 });
 

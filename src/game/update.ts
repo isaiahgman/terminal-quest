@@ -141,6 +141,33 @@ function steppingEnemy(enemy: Enemy): Enemy {
 }
 
 /**
+ * The nearest walkable tile outside the base's safe zone (Chebyshev distance
+ * to `from`, ties by row-major scan order — deterministic). `undefined` on a
+ * degenerate world with no walkable ground outside the zone. Used to evict
+ * enemies the growing zone swallows, so the "enemies never set foot on home
+ * ground" invariant holds by construction.
+ */
+function nearestTileOutsideBase(
+  world: GameState['world'],
+  base: NonNullable<GameState['base']>,
+  from: { x: number; y: number },
+): { x: number; y: number } | undefined {
+  let best: { x: number; y: number } | undefined;
+  let bestDist = Infinity;
+  for (let ty = 0; ty < world.height; ty++) {
+    for (let tx = 0; tx < world.width; tx++) {
+      if (!isWalkable(world, tx, ty) || inBase(base, tx, ty)) continue;
+      const dist = Math.max(Math.abs(tx - from.x), Math.abs(ty - from.y));
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = { x: tx, y: ty };
+      }
+    }
+  }
+  return best;
+}
+
+/**
  * Advance the simulation by one tick. PURE: the same (state, intents, dt, rng)
  * always produces the same result — no I/O, no drawing, no `Math.random` (the
  * only randomness is the injected `rng`, consumed solely by attack rolls). This
@@ -158,6 +185,20 @@ export function update(
   dt: number,
   rng: RngFn,
 ): GameState {
+  // --- A finished run is inert (TQ-020's sim-level invariant). The loop
+  // already freezes on a terminal status, but the guarantee belongs to the
+  // sim itself: any caller (a replay tool, a test harness, a future rewind)
+  // ticking a 'victory'/'defeat' state gets a world where nothing moves,
+  // bites, or spends — time passes, the dead run doesn't. No RNG consumed. ---
+  if (state.status === 'victory' || state.status === 'defeat') {
+    return {
+      ...state,
+      tooTired: false,
+      hitEvents: [],
+      tick: state.tick + 1,
+    };
+  }
+
   // --- Intent selection: at most one move and one attack per tick. ---
   // Auto-repeat (holding a key) and the input buffer can queue several intents
   // per step; applying all moves would let the player jump multiple tiles in one
@@ -244,6 +285,25 @@ export function update(
     // entrance tile. Everything player-bound — hp, level, XP, the weapon you
     // dove for — walks out with you.
     const { returnPos, overworld } = state.dungeon;
+    // Settle the suspended base against the live boss count on the way out
+    // (audit L4): unreachable today (no bosses spawn below), but if one ever
+    // does, its growth must not be lost until the next surface kill. growBase
+    // is monotonic and idempotent, so this is free when nothing changed.
+    let surfacedBase = overworld.base;
+    if (overworld.base !== undefined) {
+      const settled = growBase(
+        overworld.base.growth,
+        state.bossesDefeated ?? 0,
+      );
+      // Keep the suspended object's identity when nothing grew — restoring
+      // the overworld is reference-exact unless growth genuinely changed.
+      if (
+        settled.tier !== overworld.base.growth.tier ||
+        settled.bossesDefeated !== overworld.base.growth.bossesDefeated
+      ) {
+        surfacedBase = { ...overworld.base, growth: settled };
+      }
+    }
     return {
       ...state,
       world: overworld.world,
@@ -251,7 +311,7 @@ export function update(
       enemies: overworld.enemies,
       pickups: overworld.pickups,
       entrances: overworld.entrances,
-      base: overworld.base,
+      base: surfacedBase,
       dungeon: undefined,
       tooTired: false,
       hitEvents: [],
@@ -374,6 +434,28 @@ export function update(
         // monotonic, so this only ever steps the base up.
         if (base !== undefined) {
           base = { ...base, growth: growBase(base.growth, bossesDefeated) };
+          // The grown ring may swallow enemies that were standing just outside
+          // (audit M2): they could never step within the zone again, freezing
+          // them inside the "enemies never enter" home as statues. Evict each
+          // to its nearest walkable tile OUTSIDE the new zone (nearest by
+          // Chebyshev, ties by scan order — deterministic), so the safe-zone
+          // invariant holds by construction, not luck.
+          if (enemies !== undefined) {
+            const grown = base;
+            enemies = enemies.map((live) => {
+              if (!inBase(grown, live.enemy.pos.x, live.enemy.pos.y)) {
+                return live;
+              }
+              const out = nearestTileOutsideBase(
+                state.world,
+                grown,
+                live.enemy.pos,
+              );
+              return out === undefined
+                ? live
+                : { ...live, enemy: { ...live.enemy, pos: out } };
+            });
+          }
         }
         if (TOTAL_BOSSES > 0 && bossesDefeated >= TOTAL_BOSSES) {
           status = 'victory';
@@ -405,18 +487,26 @@ export function update(
   }
 
   // --- Stamina regen (after spending), so a mash nets a drain. ---
+  // Quantize post-regen stamina to a fine grid: the per-tick increment
+  // (3 × 1/15 = 0.2) is inexact in binary, and ten accumulations reach
+  // 1.9999999999999998 — one hair short of a 2-cost jab, so the gate blocked
+  // an attack the HUD said you could afford (audit M3). A 1e-9 quantum erases
+  // the drift without touching the balance numbers.
+  const regenerated = regenStamina(
+    playerCombatant(player),
+    STAMINA_REGEN_PER_SEC * dt,
+  ).stamina;
   player = {
     ...player,
-    stamina: regenStamina(playerCombatant(player), STAMINA_REGEN_PER_SEC * dt)
-      .stamina,
+    stamina: Math.round(regenerated * 1e9) / 1e9,
   };
 
   // --- Survivors advance toward the player's new position. ---
   if (enemies !== undefined) {
     // Home ground is impassable to enemies (TQ-013): the safe zone is enforced
     // where they *step*, so the swarm parts around the base rather than needing
-    // a bespoke AI mode. An enemy the growing zone swallows can still step OUT
-    // (its target tile is outside), so nothing gets permanently entombed.
+    // a bespoke AI mode. Growth can't entomb anyone either — the growth branch
+    // above evicts enemies the new ring swallows.
     const home = base; // narrow once for the closure
     const walkable = (ex: number, ey: number): boolean =>
       isWalkable(state.world, ex, ey) &&
