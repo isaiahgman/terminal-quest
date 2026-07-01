@@ -22,6 +22,8 @@ import {
 } from './save.js';
 import { type GameState, type World, createPlayer } from '../game/state.js';
 import { createProgression } from '../game/progression.js';
+import { BOSS_ROSTER, TOTAL_BOSSES } from '../data/bosses.js';
+import { BOSSES_PER_TIER, HP_BONUS_PER_TIER } from '../game/base.js';
 
 /** A minimal valid world — `serialize` only reads seed/width/height, not tiles. */
 const world: World = {
@@ -358,5 +360,89 @@ describe('file I/O (real disk, temp HOME)', () => {
     mkdirSync(saveDir(), { recursive: true });
     writeFileSync(saveFilePath(), '{ truncated json', 'utf8');
     expect(readSave()).toBeNull();
+  });
+});
+
+describe('domain upper bounds (audit hardening)', () => {
+  const valid: SaveData = serialize(makeState());
+
+  it('rejects an all-bosses-defeated save still marked playing (unwinnable)', () => {
+    const everyBoss = BOSS_ROSTER.map((spec) => spec.id);
+    const wedged = { ...valid, defeatedBosses: everyBoss, status: 'playing' };
+    expect(parseSave(JSON.stringify(wedged))).toBeNull();
+    // The same ids with a terminal status are a legitimate finished run.
+    const won = { ...valid, defeatedBosses: everyBoss, status: 'victory' };
+    expect(parseSave(JSON.stringify(won))).not.toBeNull();
+  });
+
+  it('rejects hp above the buffed ceiling but accepts hp exactly at it', () => {
+    const progress = createProgression();
+    const maxBonus =
+      Math.floor(TOTAL_BOSSES / BOSSES_PER_TIER) * HP_BONUS_PER_TIER;
+    const at = {
+      ...valid,
+      player: { ...valid.player, hp: progress.maxHp + maxBonus },
+    };
+    expect(parseSave(JSON.stringify(at))).not.toBeNull();
+    const above = {
+      ...valid,
+      player: { ...valid.player, hp: progress.maxHp + maxBonus + 1 },
+    };
+    expect(parseSave(JSON.stringify(above))).toBeNull();
+  });
+
+  it('rejects stamina above the progression ceiling', () => {
+    const over = {
+      ...valid,
+      player: {
+        ...valid.player,
+        stamina: createProgression().maxStamina + 1,
+      },
+    };
+    expect(parseSave(JSON.stringify(over))).toBeNull();
+  });
+
+  it('rejects absurd world dimensions (the OOM crash-loop guard)', () => {
+    for (const dims of [
+      { width: 1e9, height: 25 },
+      { width: 40, height: 4096 },
+    ]) {
+      const huge = { ...valid, world: { ...valid.world, ...dims } };
+      expect(parseSave(JSON.stringify(huge))).toBeNull();
+    }
+  });
+});
+
+describe('write-failure cleanup (audit hardening)', () => {
+  const realHome = process.env.HOME;
+  let home: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'tq-savefail-'));
+    process.env.HOME = home;
+  });
+
+  afterEach(() => {
+    if (realHome === undefined) delete process.env.HOME;
+    else process.env.HOME = realHome;
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('a failed rename surfaces the error and leaves no orphan .tmp files', async () => {
+    // A DIRECTORY squatting on the save path makes the atomic rename fail
+    // (file → non-empty-dir is not renameable), exercising the finally-cleanup.
+    mkdirSync(join(saveFilePath(), 'occupied'), { recursive: true });
+    const state = makeState();
+    await expect(writeSave(state)).rejects.toThrow();
+    expect(() => writeSaveSync(state)).toThrow();
+    const tmps = readdirSync(saveDir()).filter((f) => f.endsWith('.tmp'));
+    expect(tmps).toEqual([]);
+  });
+
+  it('readSave rethrows a non-ENOENT failure instead of nuking the save', () => {
+    // Same squatter: reading a directory raises EISDIR, which must NOT be
+    // treated as "no save" — that would let the next autosave overwrite it.
+    mkdirSync(saveFilePath(), { recursive: true });
+    expect(() => readSave()).toThrow();
   });
 });
