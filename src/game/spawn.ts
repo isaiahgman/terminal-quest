@@ -155,3 +155,51 @@ export function placeWeapons(
   }
   return pickups;
 }
+
+/** Minimum Manhattan distance an entrance is placed from the player's spawn. */
+export const ENTRANCE_MIN_PLAYER_DISTANCE = 15;
+/** Minimum Manhattan distance enforced between two placed entrances. */
+export const ENTRANCE_MIN_SEPARATION = 12;
+
+/**
+ * Place `count` dungeon entrances (TQ-014) at fixed, seeded world locations.
+ * Deterministic from the injected {@link Rng} (seed it off the world seed, like
+ * every placer here), so entrances are stable landmarks: the same seed puts
+ * the same doors in the same places, across sessions.
+ *
+ * Spacing mirrors {@link placeBosses}: prefer tiles far from the player's
+ * spawn AND spread from other entrances, degrade tier by tier on cramped
+ * worlds, and never stack two entrances on one cell. Placement stops early
+ * only when no distinct walkable tile remains.
+ */
+export function placeEntrances(
+  world: World,
+  player: Vec2,
+  rng: Rng,
+  count: number,
+): Vec2[] {
+  if (count <= 0) return [];
+  const walkable = walkableTiles(world);
+  if (walkable.length === 0) return [];
+
+  const far = walkable.filter(
+    (t) => manhattan(t, player) >= ENTRANCE_MIN_PLAYER_DISTANCE,
+  );
+  const placed: Vec2[] = [];
+  for (let i = 0; i < count; i++) {
+    const untaken = (t: Vec2): boolean =>
+      !placed.some((p) => p.x === t.x && p.y === t.y) &&
+      (t.x !== player.x || t.y !== player.y);
+    let pool = far.filter(
+      (t) =>
+        untaken(t) &&
+        placed.every((p) => manhattan(t, p) >= ENTRANCE_MIN_SEPARATION),
+    );
+    if (pool.length === 0) pool = far.filter(untaken);
+    if (pool.length === 0) pool = walkable.filter(untaken);
+    if (pool.length === 0) break;
+    const pos = rng.pick(pool);
+    placed.push({ x: pos.x, y: pos.y });
+  }
+  return placed;
+}

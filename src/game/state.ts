@@ -115,6 +115,34 @@ export interface LiveEnemy {
   ai: EnemyAi;
 }
 
+/**
+ * The overworld, frozen while the player is inside a dungeon (TQ-014): exactly
+ * the world-bound fields the dungeon temporarily replaces, restored wholesale
+ * on exit so the surface is precisely as you left it. Player-bound state
+ * (stats, level, weapon, boss progress) is deliberately NOT here — what you
+ * win below, you keep above.
+ */
+export interface SuspendedOverworld {
+  world: World;
+  enemies?: readonly LiveEnemy[];
+  pickups?: readonly Pickup[];
+  entrances?: readonly Vec2[];
+  base?: HomeBase;
+}
+
+/**
+ * The in-a-dungeon context (TQ-014). Present ⇒ `GameState.world` *is* the
+ * dungeon; absent ⇒ the player is on the surface. Carries where to return to
+ * (`returnPos`, the entrance tile), which dungeon tile leads back out
+ * (`exitPos` — the tile you arrived on), and the suspended overworld itself.
+ * Plain data, so the whole push/pop stays serializable and pure.
+ */
+export interface DungeonState {
+  returnPos: Vec2;
+  exitPos: Vec2;
+  overworld: SuspendedOverworld;
+}
+
 export interface GameState {
   world: World;
   player: Player;
@@ -158,6 +186,18 @@ export interface GameState {
    * its area, and regenerates hp inside it.
    */
   base?: HomeBase;
+  /**
+   * Dungeon entrance tiles in the current world (TQ-014). Stepping onto one
+   * swaps the run into that entrance's seeded dungeon. Optional — a state with
+   * none (including the inside of a dungeon) has nowhere to descend to.
+   */
+  entrances?: readonly Vec2[];
+  /**
+   * Present while the player is inside a dungeon (TQ-014): the return/exit
+   * tiles plus the suspended overworld to restore on the way out. See
+   * {@link DungeonState}.
+   */
+  dungeon?: DungeonState;
   /**
    * Set when the player tried to attack this tick but lacked the stamina — the
    * data behind the brief "too tired" cue. The HUD surfaces it (TQ-008); for now

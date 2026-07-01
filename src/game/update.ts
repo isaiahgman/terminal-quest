@@ -7,6 +7,7 @@ import {
   isWalkable,
 } from './state.js';
 import { baseHpBonus, growBase } from './base.js';
+import { generateDungeon } from './dungeon.js';
 import {
   type Combatant,
   type RngFn,
@@ -183,6 +184,73 @@ export function update(
         y += dy;
       }
     }
+  }
+
+  // --- Dungeon transitions (TQ-014): stepping onto an entrance descends;
+  // stepping onto the dungeon's exit tile surfaces. A transition consumes the
+  // whole tick (the fresh context acts from the NEXT tick), and both trigger
+  // only on a tile the player *moved onto this tick* — so surfacing onto the
+  // entrance tile, or arriving on the exit tile, never chain-fires: you must
+  // step off and back on to go through again. ---
+  const moved = x !== state.player.pos.x || y !== state.player.pos.y;
+  if (moved && state.dungeon === undefined) {
+    const entrance = state.entrances?.find((e) => e.x === x && e.y === y);
+    if (entrance !== undefined) {
+      // Descend: swap in the entrance's deterministic dungeon (same entrance ⇒
+      // same dungeon) and suspend the overworld exactly as it stands. The base
+      // is suspended too — there is no home ground below.
+      const context = generateDungeon(state.world.seed, entrance);
+      return {
+        ...state,
+        world: context.world,
+        player: {
+          ...state.player,
+          pos: { x: context.spawn.x, y: context.spawn.y },
+        },
+        enemies: context.enemies,
+        pickups: context.pickups,
+        entrances: undefined,
+        base: undefined,
+        dungeon: {
+          returnPos: { x, y },
+          exitPos: { x: context.spawn.x, y: context.spawn.y },
+          overworld: {
+            world: state.world,
+            enemies: state.enemies,
+            pickups: state.pickups,
+            entrances: state.entrances,
+            base: state.base,
+          },
+        },
+        tooTired: false,
+        hitEvents: [],
+        tick: state.tick + 1,
+      };
+    }
+  }
+  if (
+    moved &&
+    state.dungeon !== undefined &&
+    x === state.dungeon.exitPos.x &&
+    y === state.dungeon.exitPos.y
+  ) {
+    // Surface: restore the suspended overworld wholesale and stand back on the
+    // entrance tile. Everything player-bound — hp, level, XP, the weapon you
+    // dove for — walks out with you.
+    const { returnPos, overworld } = state.dungeon;
+    return {
+      ...state,
+      world: overworld.world,
+      player: { ...state.player, pos: { x: returnPos.x, y: returnPos.y } },
+      enemies: overworld.enemies,
+      pickups: overworld.pickups,
+      entrances: overworld.entrances,
+      base: overworld.base,
+      dungeon: undefined,
+      tooTired: false,
+      hitEvents: [],
+      tick: state.tick + 1,
+    };
   }
 
   let player = { ...state.player, pos: { x, y } };

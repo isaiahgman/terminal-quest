@@ -2,7 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { update, BASE_HP_REGEN_PER_SEC, SIM_DT_SECONDS } from './update.js';
 import { type Base, BOSSES_PER_TIER, createBase } from './base.js';
 import {
+  DUNGEON_ENEMY_COUNT,
+  DUNGEON_REWARD,
+  DUNGEON_WIDTH,
+} from './dungeon.js';
+import {
   createPlayer,
+  isWalkable,
   type GameState,
   type LiveEnemy,
   type Player,
@@ -1142,5 +1148,126 @@ describe('update — home base (TQ-013)', () => {
     // …while at a tier-1 home the bare ceiling IS the cap: no drift past full.
     const capped = update(homeState({ hp: BASE_HP }), [], TICK, noRng);
     expect(capped.player.hp).toBe(BASE_HP);
+  });
+});
+
+describe('update — dungeons (TQ-014)', () => {
+  /** Player at (5,5) in an open world with one entrance at (6,5). */
+  function surfaceState(): GameState {
+    return {
+      world: openWorld(30, 30),
+      player: createPlayer({ x: 5, y: 5 }),
+      enemies: [liveEnemy('grunt', 20, 20)],
+      pickups: [{ pos: { x: 9, y: 9 }, weaponId: 'iron-sword' }],
+      base: { pos: { x: 3, y: 3 }, growth: createBase() },
+      entrances: [{ x: 6, y: 5 }],
+      tooTired: false,
+      tick: 0,
+    };
+  }
+
+  const stepEast = [{ type: 'move', dx: 1, dy: 0 } as const];
+
+  it('stepping onto an entrance descends into its seeded dungeon', () => {
+    const surface = surfaceState();
+    const below = update(surface, stepEast, TICK, noRng);
+
+    expect(below.dungeon).toBeDefined();
+    expect(below.world).not.toBe(surface.world);
+    expect(below.world.width).toBe(DUNGEON_WIDTH);
+    expect(below.enemies).toHaveLength(DUNGEON_ENEMY_COUNT);
+    expect(below.pickups![0]!.weaponId).toBe(DUNGEON_REWARD);
+    // The player stands on the exit tile; the door home is recorded.
+    expect(below.player.pos).toEqual(below.dungeon!.exitPos);
+    expect(below.dungeon!.returnPos).toEqual({ x: 6, y: 5 });
+    // No home ground below, and no doors within doors.
+    expect(below.base).toBeUndefined();
+    expect(below.entrances).toBeUndefined();
+  });
+
+  /**
+   * A move intent that steps off the exit tile onto an open neighbour (the
+   * generated cavern is fully connected, so one always exists), used to
+   * exercise the step-off/step-back exit path deterministically.
+   */
+  function openNeighbourStep(s: GameState): { dx: number; dy: number } {
+    const exit = s.dungeon!.exitPos;
+    const dirs = [
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: 0, dy: -1 },
+      { dx: 1, dy: 1 },
+      { dx: 1, dy: -1 },
+      { dx: -1, dy: 1 },
+      { dx: -1, dy: -1 },
+    ];
+    const open = dirs.find((d) =>
+      isWalkable(s.world, exit.x + d.dx, exit.y + d.dy),
+    );
+    expect(open).toBeDefined();
+    return open!;
+  }
+
+  /** Step off the exit tile and straight back on, surfacing to the overworld. */
+  function stepOffAndBack(below: GameState): GameState {
+    const step = openNeighbourStep(below);
+    const off = update(below, [{ type: 'move', ...step }], TICK, noRng);
+    expect(off.player.pos).not.toEqual(below.dungeon!.exitPos);
+    return update(
+      off,
+      [{ type: 'move', dx: -step.dx, dy: -step.dy }],
+      TICK,
+      noRng,
+    );
+  }
+
+  it('suspends the overworld exactly as it stood and restores it on exit', () => {
+    const surface = surfaceState();
+    const below = update(surface, stepEast, TICK, noRng);
+
+    // Arriving on the exit tile does NOT bounce straight back out…
+    const still = update(below, [], TICK, noRng);
+    expect(still.dungeon).toBeDefined();
+
+    // …but stepping off and back onto it surfaces, restoring the overworld
+    // wholesale (same references — frozen, not recomputed).
+    const back = stepOffAndBack(still);
+    expect(back.dungeon).toBeUndefined();
+    expect(back.world).toBe(surface.world);
+    expect(back.enemies).toBe(surface.enemies);
+    expect(back.pickups).toBe(surface.pickups);
+    expect(back.base).toBe(surface.base);
+    expect(back.entrances).toBe(surface.entrances);
+    expect(back.player.pos).toEqual({ x: 6, y: 5 });
+  });
+
+  it('what you gain below walks out with you (XP persists across exit)', () => {
+    const surface = surfaceState();
+    let s = update(surface, stepEast, TICK, noRng);
+    // Award XP below by slaying a pre-dead enemy injected into the dungeon.
+    s = {
+      ...s,
+      enemies: [...(s.enemies ?? []), deadEnemy('grunt', 1, 1)],
+    };
+    s = update(s, [], TICK, noRng);
+    const xpBelow = s.player.progress!.xp;
+    expect(xpBelow).toBeGreaterThan(0);
+
+    const out = stepOffAndBack(s);
+    expect(out.dungeon).toBeUndefined();
+    expect(out.player.progress!.xp).toBe(xpBelow);
+  });
+
+  it('standing on the entrance without moving does not re-descend', () => {
+    const surface = surfaceState();
+    // Put the player ON the entrance with no move intent: no transition.
+    const parked: GameState = {
+      ...surface,
+      player: { ...surface.player, pos: { x: 6, y: 5 } },
+    };
+    const next = update(parked, [], TICK, noRng);
+    expect(next.dungeon).toBeUndefined();
+    expect(next.world).toBe(surface.world);
   });
 });
