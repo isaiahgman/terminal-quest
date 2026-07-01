@@ -293,6 +293,33 @@ describe('drawHud — home base (TQ-013)', () => {
   });
 });
 
+describe('drawHud — the base buff is player-bound (audit fix)', () => {
+  it('the hp ceiling keeps the SUSPENDED base buff inside a dungeon', () => {
+    const screen = new FakeScreen();
+    drawHud(
+      screen,
+      makeState({
+        dungeon: {
+          returnPos: { x: 1, y: 1 },
+          exitPos: { x: 0, y: 0 },
+          overworld: {
+            world: makeState().world,
+            base: {
+              pos: { x: 0, y: 0 },
+              growth: { tier: 2, bossesDefeated: 2 },
+            },
+          },
+        },
+      }),
+      0,
+      60,
+    );
+    // 18 hp against maxHp 20 + the suspended tier-2 buff (10) = 30 — NOT the
+    // over-full 18/20 the un-buffed ceiling produced before the fix.
+    expect(rowText(screen, 0, 60)).toContain('18/30');
+  });
+});
+
 describe('drawHud — dungeons (TQ-014)', () => {
   const WIDTH = 60;
 

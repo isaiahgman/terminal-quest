@@ -182,10 +182,13 @@ export function drawHud(
   const { player, tooTired } = state;
   const progress = player.progress ?? createProgression();
   // The hp ceiling includes the home base's tier buff (TQ-013), matching the
-  // effective ceiling the sim refills/regens toward — bar and sim never disagree.
+  // effective ceiling the sim refills/regens toward — bar and sim never
+  // disagree. The buff is player-bound, so inside a dungeon it reads the
+  // SUSPENDED base (TQ-014): without this, a surface-full player descending
+  // showed hp above max (e.g. 223/173) as if the readout had glitched.
+  const home = state.base ?? state.dungeon?.overworld.base;
   const maxHp =
-    progress.maxHp +
-    (state.base === undefined ? 0 : baseHpBonus(state.base.growth));
+    progress.maxHp + (home === undefined ? 0 : baseHpBonus(home.growth));
   // Floor each current value once and feed the SAME number to both the bar and
   // the numeric readout, so the two can never disagree — e.g. a rounded "10/10"
   // sitting beside a bar that isn't full. hp is integer; stamina accrues

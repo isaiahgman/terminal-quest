@@ -56,6 +56,12 @@ export const BASE_HP_REGEN_PER_SEC = 2;
  * tier buff (TQ-013) — the one place the two growth axes meet. States without
  * progression default the fresh level-1 ceiling (the usual idiom); states
  * without a base get no bonus.
+ *
+ * The buff is PLAYER-BOUND growth, not world scenery: while inside a dungeon
+ * the live base is suspended, so callers must pass the suspended one
+ * (`state.dungeon?.overworld.base`) — descending must never shrink the hp
+ * ceiling. (The audit found a level-up below could otherwise "refill" the
+ * player DOWNWARD to the un-buffed ceiling, and the HUD showed hp above max.)
  */
 function effectiveMaxHp(
   player: GameState['player'],
@@ -380,15 +386,19 @@ export function update(
       // come out of the grind measurably stronger (prd §2). Full-refill policy;
       // a multi-level gain heals once, to the final caps. `atk` already applies
       // live, so the offensive half of the surge needed nothing here. The hp
-      // ceiling includes the base's tier buff (TQ-013); this runs after the
-      // boss/base block so a boss kill that levels you refills to the ceiling
-      // the kill just grew.
-      const leveledTo = player.progress?.level ?? 1;
-      if (leveledTo > priorLevel) {
+      // ceiling includes the base's tier buff (TQ-013) — via buffBase, so a
+      // level-up INSIDE a dungeon still counts the suspended home — and the
+      // Math.max guard means a "refill" can never heal DOWNWARD, whatever the
+      // ceiling does. Runs after the boss/base block so a boss kill that levels
+      // you refills to the ceiling the kill just grew.
+      // `base` (the grown local) on the surface; the suspended home below.
+      const homeForBuff = base ?? state.dungeon?.overworld.base;
+      const progressNow = player.progress ?? createProgression();
+      if (progressNow.level > priorLevel) {
         player = {
           ...player,
-          hp: effectiveMaxHp(player, base),
-          stamina: player.progress?.maxStamina ?? player.stamina,
+          hp: Math.max(player.hp, effectiveMaxHp(player, homeForBuff)),
+          stamina: progressNow.maxStamina,
         };
       }
     }
