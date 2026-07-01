@@ -8,6 +8,8 @@ import {
   BASE_FLOOR_GLYPH,
   BASE_HEART_GLYPH,
   DAMAGE_NUMBER_COLOR,
+  ENTRANCE_GLYPH,
+  EXIT_GLYPH,
   HIT_FLASH_COLOR,
   PICKUP_GLYPH,
   PLAYER_GLYPH,
@@ -215,6 +217,28 @@ export class Renderer {
           cellAttr(BASE_HEART_GLYPH, true),
           BASE_HEART_GLYPH.char,
         );
+      }
+    }
+
+    // Stairs (TQ-014), drawn like pickups: over the tiles, under everything
+    // that moves. On the surface every entrance shows its down-stairs; inside
+    // a dungeon the exit tile shows the way back up.
+    for (const entrance of state.entrances ?? []) {
+      const ex = entrance.x - cam.x + shake.x;
+      const ey = entrance.y - cam.y + shake.y;
+      if (ex < 0 || ey < 0 || ex >= width || ey >= playH) continue;
+      this.putGlyph(
+        ex,
+        ey,
+        cellAttr(ENTRANCE_GLYPH, true),
+        ENTRANCE_GLYPH.char,
+      );
+    }
+    if (state.dungeon !== undefined) {
+      const gx = state.dungeon.exitPos.x - cam.x + shake.x;
+      const gy = state.dungeon.exitPos.y - cam.y + shake.y;
+      if (gx >= 0 && gy >= 0 && gx < width && gy < playH) {
+        this.putGlyph(gx, gy, cellAttr(EXIT_GLYPH, true), EXIT_GLYPH.char);
       }
     }
 

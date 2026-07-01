@@ -49,6 +49,8 @@ const TIRED_COLOR = 'brightYellow';
 const WEAPON_COLOR = 'brightCyan';
 /** The base-tier readout — matches the home-ground palette (`sprites.ts`). */
 const BASE_COLOR = 'brightBlue';
+/** The in-a-dungeon tag — hot, like the stairs glyph: you are in the risk. */
+const DUNGEON_COLOR = 'brightMagenta';
 /** Blank padding cells carry no visible glyph, so their foreground is moot — a
  *  neutral name, kept decoupled from the bar palette. */
 const PAD_COLOR = 'gray';
@@ -227,6 +229,9 @@ export function drawHud(
       text: `   Base T${state.base.growth.tier}`,
       color: BASE_COLOR,
     });
+  }
+  if (state.dungeon !== undefined) {
+    statsRow.push({ text: '   DUNGEON', color: DUNGEON_COLOR, bold: true });
   }
   layoutRow(screen, top + 2, width, statsRow);
 }

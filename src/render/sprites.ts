@@ -33,6 +33,13 @@ const PALETTE = {
   baseFloor: { char: '·', color: 'brightBlue', bg: 'black' },
   /** The hearth at the base's center — the landmark you walk home toward. */
   baseHeart: { char: '⌂', color: 'brightCyan', bg: 'black' },
+  /**
+   * A dungeon entrance (TQ-014) — the classic roguelike down-stairs, in a hot
+   * warning colour: risk lives through this door.
+   */
+  entrance: { char: '>', color: 'brightMagenta', bg: 'black' },
+  /** The way back out of a dungeon — the up-stairs on the tile you arrived on. */
+  exit: { char: '<', color: 'brightMagenta', bg: 'black' },
 } as const satisfies Record<string, Glyph>;
 
 export function glyphForTile(tile: Tile): Readonly<Glyph> {
@@ -64,6 +71,12 @@ export const BASE_FLOOR_GLYPH: Readonly<Glyph> = PALETTE.baseFloor;
 
 /** The hearth glyph at the base's center tile (TQ-013). */
 export const BASE_HEART_GLYPH: Readonly<Glyph> = PALETTE.baseHeart;
+
+/** A dungeon entrance's down-stairs glyph (TQ-014). */
+export const ENTRANCE_GLYPH: Readonly<Glyph> = PALETTE.entrance;
+
+/** The dungeon exit's up-stairs glyph (TQ-014). */
+export const EXIT_GLYPH: Readonly<Glyph> = PALETTE.exit;
 
 /**
  * Build a terminal-kit cell attribute from a glyph. `bgColor` is included only
