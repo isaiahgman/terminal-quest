@@ -189,9 +189,11 @@ describe('parseSave rejects corrupt input (→ new game)', () => {
     expect(parseSave('"a string"')).toBeNull();
   });
 
-  it('returns null on an unknown (newer) version', () => {
-    const wrong = { ...valid, version: SAVE_VERSION + 1 };
-    expect(parseSave(JSON.stringify(wrong))).toBeNull();
+  it('returns null on any version mismatch — hard reset on bump (TQ-022)', () => {
+    for (const version of [SAVE_VERSION + 1, SAVE_VERSION - 1]) {
+      const wrong = { ...valid, version };
+      expect(parseSave(JSON.stringify(wrong))).toBeNull();
+    }
   });
 
   it('returns null for an unknown defeated-boss id', () => {
@@ -303,33 +305,8 @@ describe('parseSave rejects corrupt input (→ new game)', () => {
   });
 });
 
-describe('v1 → v2 upgrade (tolerant loader, TQ-022)', () => {
-  /** A save exactly as v1 wrote it: no defeatedBosses, no status, version 1. */
-  function v1Save(): Record<string, unknown> {
-    const v2 = serialize(makeState()) as unknown as Record<string, unknown>;
-    const v1: Record<string, unknown> = { ...v2, version: 1 };
-    delete v1.defeatedBosses;
-    delete v1.status;
-    return v1;
-  }
-
-  it('loads a v1 save with the new fields defaulted (progress kept)', () => {
-    const upgraded = parseSave(JSON.stringify(v1Save()));
-    expect(upgraded).not.toBeNull();
-    expect(upgraded).toEqual({
-      ...v1Save(),
-      version: SAVE_VERSION,
-      defeatedBosses: [],
-      status: 'playing',
-    });
-  });
-
-  it('still rejects a corrupt v1 save (upgrade is not a bypass)', () => {
-    const bad = { ...v1Save(), player: null };
-    expect(parseSave(JSON.stringify(bad))).toBeNull();
-  });
-
-  it('boss progress survives a serialize → parse round trip (no reset)', () => {
+describe('boss progress round trip (TQ-022)', () => {
+  it('survives serialize → parse with no reset', () => {
     const save = serialize({
       ...makeState(),
       bossesDefeated: 1,
