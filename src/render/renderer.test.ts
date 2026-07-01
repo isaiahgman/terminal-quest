@@ -468,4 +468,43 @@ describe('Renderer', () => {
     const wallPut = puts.find((f) => f.x === 0 && f.y === 0);
     expect(wallPut?.char).not.toBe(BASE_FLOOR_GLYPH.char);
   });
+
+  it('draws entrance down-stairs on the surface and the exit inside a dungeon (TQ-014)', async () => {
+    const { Renderer } = await import('./renderer.js');
+    const { ENTRANCE_GLYPH, EXIT_GLYPH } = await import('./sprites.js');
+
+    // Surface: an entrance on the open floor at (2,1).
+    const surface: GameState = {
+      ...makeState(),
+      enemies: [],
+      entrances: [{ x: 2, y: 1 }],
+    };
+    const surfaceRenderer = new Renderer();
+    surfaceRenderer.render(surface);
+    const surfacePuts = recordedPuts(surfaceRenderer);
+    expect(
+      surfacePuts.some(
+        (p) => p.x === 2 && p.y === 1 && p.char === ENTRANCE_GLYPH.char,
+      ),
+    ).toBe(true);
+
+    // Below: the exit tile shows the way back up; no entrances drawn.
+    const below: GameState = {
+      ...makeState(),
+      enemies: [],
+      dungeon: {
+        returnPos: { x: 9, y: 9 },
+        exitPos: { x: 2, y: 1 },
+        overworld: { world: makeState().world },
+      },
+    };
+    const belowRenderer = new Renderer();
+    belowRenderer.render(below);
+    const belowPuts = recordedPuts(belowRenderer);
+    expect(
+      belowPuts.some(
+        (p) => p.x === 2 && p.y === 1 && p.char === EXIT_GLYPH.char,
+      ),
+    ).toBe(true);
+  });
 });
