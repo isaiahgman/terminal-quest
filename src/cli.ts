@@ -10,7 +10,8 @@ import {
 } from './game/state.js';
 import { type SwarmKind, createEnemy } from './game/enemy.js';
 import { createEnemyAi } from './game/entities.js';
-import { createBase, growBase } from './game/base.js';
+import { baseHpBonus, createBase, growBase } from './game/base.js';
+import { createProgression } from './game/progression.js';
 import { generateWorld } from './game/world/generate.js';
 import { Rng } from './game/rng.js';
 import {
@@ -208,8 +209,26 @@ async function main(): Promise<void> {
   // world — reproduces from the seed. (Persisting the base's grown state across
   // sessions is the TQ-013 save slice, landing next.)
   const homePos = pickSpawn(world, setupRng);
+  // The base's grown state derives from the persisted boss count (see the
+  // `base:` note below) — computed here because the defeat-respawn path needs
+  // the tier's hp buff before the state is assembled.
+  const homeGrowth = growBase(createBase(), save?.defeatedBosses.length ?? 0);
   let player: Player;
-  if (save) {
+  if (save?.status === 'defeat') {
+    // Death returns you to base, and you keep your growth (prd §7, TQ-013):
+    // a defeated save relaunches as a live run — full hp/stamina at the grown
+    // ceilings, standing at the hearth — with level, weapon, and boss progress
+    // all intact. The run's stakes stay real (TQ-020 halted the dead run); the
+    // roguelite promise is that the *growth* survives, not the moment.
+    const restored = playerFromSave(save);
+    const progress = restored.progress ?? createProgression();
+    player = {
+      ...restored,
+      pos: { x: homePos.x, y: homePos.y },
+      hp: progress.maxHp + baseHpBonus(homeGrowth),
+      stamina: progress.maxStamina,
+    };
+  } else if (save) {
     const restored = playerFromSave(save);
     // A hand-edited or stale save can carry a pos that isn't walkable in the
     // rebuilt world (out of bounds, or inside a wall) — which would soft-lock
@@ -247,9 +266,11 @@ async function main(): Promise<void> {
     // tile array", applied to the home.
     base: {
       pos: { x: homePos.x, y: homePos.y },
-      growth: growBase(createBase(), save?.defeatedBosses.length ?? 0),
+      growth: homeGrowth,
     },
-    status: save?.status,
+    // A defeated run resumes *playing* (respawned at base, above); victory
+    // stays sticky — a won game remains won on relaunch (TQ-022 decision #2).
+    status: save?.status === 'defeat' ? undefined : save?.status,
     // Weapon pickups scattered from the same seeded RNG (TQ-010). Not persisted
     // by the save yet, so they reseed from the seed on resume — like the swarm.
     pickups: placeWeapons(world, player.pos, setupRng, WEAPON_COUNT),
