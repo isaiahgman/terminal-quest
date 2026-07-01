@@ -394,6 +394,23 @@ describe('update — weapons: equip on pickup + boosted damage (TQ-010)', () => 
     expect(next.player.weapon).toBe('rusted-dagger');
   });
 
+  it('standing on a pickup without moving does not equip it (audit fix)', () => {
+    // Zero input while sharing a tile with a pickup — e.g. just surfaced from
+    // a dungeon onto a tile with loot — must never swap the slot silently.
+    const player = createPlayer({ x: 2, y: 1 });
+    const state: GameState = {
+      ...makeState({ player: { ...player, weapon: 'warhammer' } }),
+      pickups: [{ pos: { x: 2, y: 1 }, weaponId: 'rusted-dagger' }],
+    };
+    const next = update(state, [], TICK, noRng);
+    expect(next.player.weapon).toBe('warhammer'); // reward kept
+    expect(next.pickups).toHaveLength(1); // pickup still on the ground
+    // Deliberately stepping off and back on DOES equip it.
+    const off = update(next, [{ type: 'move', dx: -1, dy: 0 }], TICK, noRng);
+    const back = update(off, [{ type: 'move', dx: 1, dy: 0 }], TICK, noRng);
+    expect(back.player.weapon).toBe('rusted-dagger');
+  });
+
   it('leaves a pickup untouched when the player only passes near it', () => {
     // Player at (1,1) moves down to (1,2); the pickup at (2,1) is not stepped on.
     const state: GameState = {
