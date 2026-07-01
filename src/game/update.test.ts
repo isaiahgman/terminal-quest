@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { update, BASE_HP_REGEN_PER_SEC, SIM_DT_SECONDS } from './update.js';
-import { type Base, BOSSES_PER_TIER, createBase } from './base.js';
+import {
+  type Base,
+  BOSSES_PER_TIER,
+  HP_BONUS_PER_TIER,
+  createBase,
+} from './base.js';
 import {
   DUNGEON_ENEMY_COUNT,
   DUNGEON_REWARD,
@@ -20,6 +25,7 @@ import { createEnemyAi } from './entities.js';
 import {
   BASE_HP,
   createProgression,
+  gainXp,
   xpForKill,
   xpToNext,
 } from './progression.js';
@@ -1165,6 +1171,67 @@ describe('update — home base (TQ-013)', () => {
     // …while at a tier-1 home the bare ceiling IS the cap: no drift past full.
     const capped = update(homeState({ hp: BASE_HP }), [], TICK, noRng);
     expect(capped.player.hp).toBe(BASE_HP);
+  });
+});
+
+describe('update — the base buff is player-bound (audit fix)', () => {
+  /** In-dungeon state: live base suspended, tier-2 home in the overworld. */
+  function dungeonState(hp: number, xpAward = false): GameState {
+    const player = createPlayer({ x: 5, y: 5 });
+    return {
+      world: openWorld(12, 12),
+      player: { ...player, hp },
+      enemies: xpAward ? [deadEnemy('grunt', 1, 1)] : [],
+      dungeon: {
+        returnPos: { x: 2, y: 2 },
+        exitPos: { x: 9, y: 9 },
+        overworld: {
+          world: openWorld(30, 30),
+          base: {
+            pos: { x: 2, y: 2 },
+            growth: { tier: 2, bossesDefeated: 2 },
+          },
+        },
+      },
+      tooTired: false,
+      tick: 0,
+    };
+  }
+
+  /** XP that crosses exactly one level from a fresh progression. */
+  function levelUpXp(state: GameState): GameState {
+    const primed = gainXp(
+      createProgression(),
+      xpToNext(1) - xpForKill(state.enemies![0]!.enemy),
+    );
+    return {
+      ...state,
+      player: { ...state.player, progress: primed },
+    };
+  }
+
+  it('a level-up below refills toward the SUSPENDED base-buffed ceiling', () => {
+    const state = levelUpXp(dungeonState(5, true));
+    const next = update(state, [], TICK, noRng);
+    expect(next.player.progress!.level).toBe(2);
+    // New ceiling = level-2 maxHp + the suspended tier-2 home's bonus.
+    expect(next.player.hp).toBe(
+      next.player.progress!.maxHp + HP_BONUS_PER_TIER,
+    );
+  });
+
+  it('a level-up can never heal DOWNWARD, whatever the ceiling', () => {
+    // Player above the bare level-2 ceiling (buffed healing on the surface);
+    // pre-fix the refill SET hp to the un-buffed ceiling, cutting it.
+    const state = levelUpXp(dungeonState(1, true));
+    const level2MaxHp = gainXp(createProgression(), xpToNext(1)).maxHp;
+    const rich = {
+      ...state,
+      player: { ...state.player, hp: level2MaxHp + HP_BONUS_PER_TIER + 5 },
+    };
+    const next = update(rich, [], TICK, noRng);
+    expect(next.player.progress!.level).toBe(2);
+    expect(next.player.hp).toBeGreaterThanOrEqual(rich.player.hp);
   });
 });
 
