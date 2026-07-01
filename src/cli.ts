@@ -185,8 +185,12 @@ async function main(): Promise<void> {
   // Install crash/signal handlers before any setup runs: a throw from world
   // generation, spawn placement, or the renderer/input constructors below must
   // still restore the terminal via shutdown(), never leave it raw/alt-screen.
-  process.on('SIGINT', () => shutdown(0));
-  process.on('SIGTERM', () => shutdown(0));
+  process.on('SIGINT', () => {
+    shutdown(0);
+  });
+  process.on('SIGTERM', () => {
+    shutdown(0);
+  });
   process.on('uncaughtException', (err: unknown) => {
     console.error(err);
     shutdown(1);
@@ -330,6 +334,10 @@ async function main(): Promise<void> {
   let lastSavedWeapon = state.player.weapon;
   let saving = false;
   let pending = false;
+  // Read through a function: `pending` is flipped by OTHER flushSave calls
+  // between this one's awaits, which TS's narrowing can't see — a bare
+  // `while (pending)` reads as always-false to the type-aware linter.
+  const pendingNow = (): boolean => pending;
   const flushSave = async (): Promise<void> => {
     if (saving) {
       pending = true; // collapse a burst into one more write after this one
@@ -345,7 +353,7 @@ async function main(): Promise<void> {
         // when the signal hits is a one-syscall race this can't close.)
         if (shuttingDown) return;
         if (latestState !== undefined) await writeSave(latestState);
-      } while (pending);
+      } while (pendingNow());
     } catch (err: unknown) {
       // Stash, don't print: the renderer owns the screen right now. Surfaced
       // once by shutdown() after the terminal is restored.
@@ -383,7 +391,9 @@ async function main(): Promise<void> {
       renderer.render(s);
     },
     shouldStop: () => input.shouldQuit,
-    onStop: () => shutdown(0),
+    onStop: () => {
+      shutdown(0);
+    },
   });
 }
 

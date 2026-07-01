@@ -24,6 +24,7 @@
 // OPEN / MERGED / CLOSED (exactly what `gh pr list --json number,title,state`
 // prints; lowercase state names are accepted and normalized).
 
+import process from 'node:process';
 import { execSync } from 'node:child_process';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -70,6 +71,17 @@ function readTickets() {
 /** Pull every PR (any state) as {number, title, state}, via `gh` or `--prs <file>`. */
 function readPrs() {
   const prsFlag = process.argv.indexOf('--prs');
+  if (prsFlag !== -1) {
+    const file = process.argv[prsFlag + 1];
+    // Guard the argument: a missing value (or the next flag) would otherwise
+    // surface as a raw fs crash on a file literally named "--write".
+    if (file === undefined || file.startsWith('--')) {
+      process.stderr.write(
+        'usage: node scripts/status.mjs [--prs <file.json>] [--write]\n',
+      );
+      process.exit(2);
+    }
+  }
   const raw =
     prsFlag !== -1
       ? readFileSync(process.argv[prsFlag + 1], 'utf8')

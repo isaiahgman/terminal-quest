@@ -214,7 +214,7 @@ describe('update — diagonal wall-slide (TQ-017)', () => {
     width: 3,
     height: 3,
     tiles: rows.map((row) =>
-      [...row].map((c): Tile => (c === '#' ? 'wall' : 'floor')),
+      row.split('').map((c): Tile => (c === '#' ? 'wall' : 'floor')),
     ),
     seed: 0,
   });

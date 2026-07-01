@@ -94,7 +94,9 @@ function probeKittySupport(io: KeyboardIo): Promise<ProbeResult> {
 
     // No response at all (legacy terminal) → unsupported; surface whatever was
     // typed during the wait so it still reaches the game.
-    const timer = setTimeout(() => finish(false, buffer), PROBE_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      finish(false, buffer);
+    }, PROBE_TIMEOUT_MS);
     io.stdin.on('data', onData);
     io.stdout.write(PROBE);
   });

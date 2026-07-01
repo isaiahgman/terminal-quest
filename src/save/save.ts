@@ -254,7 +254,7 @@ function isSaveData(value: unknown): value is SaveData {
   if (
     value.status === 'playing' &&
     TOTAL_BOSSES > 0 &&
-    (value.defeatedBosses as readonly string[]).length >= TOTAL_BOSSES
+    value.defeatedBosses.length >= TOTAL_BOSSES
   ) {
     return false;
   }
@@ -287,7 +287,7 @@ function isSaveData(value: unknown): value is SaveData {
   // their ceilings are unreachable in play (regen/refill only ever fill *to*
   // a ceiling) and the sim never clamps them down — a hand-edited
   // `hp: 1e300` would be permanent god-mode through the front door.
-  const progress = player.progress as Progression;
+  const progress = player.progress;
   if (
     player.hp > progress.maxHp + MAX_BASE_HP_BONUS ||
     player.stamina > progress.maxStamina

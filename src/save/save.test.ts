@@ -294,7 +294,7 @@ describe('parseSave rejects corrupt input (→ new game)', () => {
   });
 
   it('returns null for type-valid but out-of-domain stats', () => {
-    const cases: Array<Record<string, unknown>> = [
+    const cases: Record<string, unknown>[] = [
       { ...valid.player, hp: -9999 },
       { ...valid.player, def: -50 },
       { ...valid.player, progress: { ...valid.player.progress, level: 2.7 } },
@@ -434,7 +434,9 @@ describe('write-failure cleanup (audit hardening)', () => {
     mkdirSync(join(saveFilePath(), 'occupied'), { recursive: true });
     const state = makeState();
     await expect(writeSave(state)).rejects.toThrow();
-    expect(() => writeSaveSync(state)).toThrow();
+    expect(() => {
+      writeSaveSync(state);
+    }).toThrow();
     const tmps = readdirSync(saveDir()).filter((f) => f.endsWith('.tmp'));
     expect(tmps).toEqual([]);
   });

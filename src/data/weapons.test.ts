@@ -58,7 +58,7 @@ describe('applyWeapon', () => {
   });
 
   it('leaves hitChance and name untouched (gear changes power, not reliability)', () => {
-    const out = applyWeapon(BASE_SPEC, WEAPONS['warhammer']);
+    const out = applyWeapon(BASE_SPEC, WEAPONS.warhammer);
     expect(out.hitChance).toBe(BASE_SPEC.hitChance);
     expect(out.name).toBe(BASE_SPEC.name);
   });
@@ -151,7 +151,7 @@ describe('applyWeapon ∘ resolveAttack — the engine actually deals more', () 
     const armed = resolveAttack(
       attacker,
       [target()],
-      applyWeapon(BASE_SPEC, WEAPONS['warhammer']),
+      applyWeapon(BASE_SPEC, WEAPONS.warhammer),
       rng,
     );
     expect(unarmed.outcomes[0]!.damage).toBe(8); // 5 + atk 3 - def 0
@@ -183,7 +183,7 @@ describe('applyWeapon ∘ resolveAttack — the engine actually deals more', () 
     const armed = resolveAttack(
       attacker,
       [farTarget()],
-      applyWeapon(BASE_SPEC, WEAPONS['warhammer']),
+      applyWeapon(BASE_SPEC, WEAPONS.warhammer),
       rng,
     );
     expect(unarmed.outcomes).toHaveLength(0); // out of reach unarmed

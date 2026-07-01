@@ -33,7 +33,7 @@ export interface World {
   readonly width: number;
   readonly height: number;
   /** Row-major: tiles[y][x]. Deeply read-only — Render is read-only (see TDD). */
-  readonly tiles: ReadonlyArray<ReadonlyArray<Tile>>;
+  readonly tiles: readonly (readonly Tile[])[];
   readonly seed: number;
 }
 
