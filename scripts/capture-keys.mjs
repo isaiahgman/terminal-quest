@@ -35,6 +35,10 @@ stdin.on('data', (chunk) => {
   // Ctrl-C in raw mode arrives as 0x03 (and as CSI 99;5u with the protocol).
   if (chunk.includes(0x03)) process.exit(0);
   const hex = [...chunk].map((b) => b.toString(16).padStart(2, '0')).join(' ');
-  const printable = chunk.toString('latin1').replace(/\x1b/g, 'ESC');
+  // Built via fromCharCode so the ESC control byte never appears literally
+  // in source (eslint no-control-regex) — the pattern still matches it.
+  const printable = chunk
+    .toString('latin1')
+    .replaceAll(String.fromCharCode(0x1b), 'ESC');
   stdout.write(`${hex}    ${printable}\r\n`);
 });

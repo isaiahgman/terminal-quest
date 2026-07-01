@@ -17,17 +17,26 @@ function makeInput(): {
 } {
   const clock = { ms: 0 };
   const input = new Input(() => clock.ms);
-  const fire = (name: string, kind: KeyKind): void =>
+  const fire = (name: string, kind: KeyKind): void => {
     input.apply({ name, kind });
+  };
   return {
     input,
-    press: (name) => fire(name, 'press'),
-    repeat: (name) => fire(name, 'repeat'),
-    release: (name) => fire(name, 'release'),
+    press: (name) => {
+      fire(name, 'press');
+    },
+    repeat: (name) => {
+      fire(name, 'repeat');
+    },
+    release: (name) => {
+      fire(name, 'release');
+    },
     advance: (ms) => {
       clock.ms += ms;
     },
-    useReleaseEvents: () => input.useReleaseEvents(),
+    useReleaseEvents: () => {
+      input.useReleaseEvents();
+    },
   };
 }
 
@@ -35,7 +44,7 @@ const SIM_DT = 1000 / 15; // one game tick (~66.7 ms)
 
 describe('Input — timeout tier (no release events)', () => {
   it('maps each movement key (arrows + WASD) to the right {dx, dy} delta', () => {
-    const cases: Array<[string, number, number]> = [
+    const cases: [string, number, number][] = [
       ['UP', 0, -1],
       ['DOWN', 0, 1],
       ['LEFT', -1, 0],
@@ -133,7 +142,7 @@ describe('Input — timeout tier (no release events)', () => {
   });
 
   it('reaches all four diagonals from a horizontal + vertical hold', () => {
-    const cases: Array<[string, string, number, number]> = [
+    const cases: [string, string, number, number][] = [
       ['UP', 'RIGHT', 1, -1],
       ['UP', 'LEFT', -1, -1],
       ['DOWN', 'RIGHT', 1, 1],
@@ -197,7 +206,7 @@ describe('Input — timeout tier (no release events)', () => {
 
 describe('Input — attacks (one-shot)', () => {
   it('maps the attack keys to one-shot attack intents', () => {
-    const cases: Array<[string, string]> = [
+    const cases: [string, string][] = [
       ['j', 'quick-jab'],
       ['k', 'wide-cleave'],
       ['l', 'whirling-maelstrom'],

@@ -44,7 +44,9 @@ class FakeScreenBuffer {
       bgColor: opts.attr?.bgColor,
     });
   }
-  draw(): void {}
+  draw(): void {
+    // Recording fake — nothing to flush to a real terminal.
+  }
 }
 
 // Deterministic clock for multi-render tests: the renderer ages its fx pool
@@ -376,7 +378,7 @@ describe('Renderer', () => {
     // player draws shifted off its un-shaken screen cell. (The fx overlay draws
     // after the player now, so find the player glyph by char in the world band.)
     const worldPuts = puts.filter((p) => p.y < playH);
-    const playerPut = worldPuts.filter((p) => p.char === PLAYER_GLYPH.char)[0]!;
+    const playerPut = worldPuts.find((p) => p.char === PLAYER_GLYPH.char)!;
     expect(playerPut).toBeDefined();
     const unshakenX = state.player.pos.x - cam.x;
     const unshakenY = state.player.pos.y - cam.y;

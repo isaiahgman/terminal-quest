@@ -277,8 +277,7 @@ export function update(
   }
   if (
     moved &&
-    state.dungeon !== undefined &&
-    x === state.dungeon.exitPos.x &&
+    x === state.dungeon?.exitPos.x &&
     y === state.dungeon.exitPos.y
   ) {
     // Surface: restore the suspended overworld wholesale and stand back on the
@@ -445,22 +444,20 @@ export function update(
           // to its nearest walkable tile OUTSIDE the new zone (nearest by
           // Chebyshev, ties by scan order — deterministic), so the safe-zone
           // invariant holds by construction, not luck.
-          if (enemies !== undefined) {
-            const grown = base;
-            enemies = enemies.map((live) => {
-              if (!inBase(grown, live.enemy.pos.x, live.enemy.pos.y)) {
-                return live;
-              }
-              const out = nearestTileOutsideBase(
-                state.world,
-                grown,
-                live.enemy.pos,
-              );
-              return out === undefined
-                ? live
-                : { ...live, enemy: { ...live.enemy, pos: out } };
-            });
-          }
+          const grown = base;
+          enemies = enemies.map((live) => {
+            if (!inBase(grown, live.enemy.pos.x, live.enemy.pos.y)) {
+              return live;
+            }
+            const out = nearestTileOutsideBase(
+              state.world,
+              grown,
+              live.enemy.pos,
+            );
+            return out === undefined
+              ? live
+              : { ...live, enemy: { ...live.enemy, pos: out } };
+          });
         }
         if (TOTAL_BOSSES > 0 && bossesDefeated >= TOTAL_BOSSES) {
           status = 'victory';

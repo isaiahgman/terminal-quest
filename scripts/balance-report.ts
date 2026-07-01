@@ -108,7 +108,7 @@ for (const level of [1, 2, 3, 4, 5, 6, 8, 10, 12, 15]) {
 // --- 2. Boss ladder: time-to-kill at various (level, weapon) loadouts --------
 console.log('\n== Boss ladder: sustained time-to-kill in seconds ==');
 console.log('(kiting assumed; "∞-ish" > 300s reads as a wall)\n');
-const loadouts: Array<{ label: string; level: number; weapon?: WeaponId }> = [
+const loadouts: { label: string; level: number; weapon?: WeaponId }[] = [
   { label: 'L1 unarmed ', level: 1 },
   { label: 'L3 +dagger ', level: 3, weapon: 'rusted-dagger' },
   { label: 'L5 +sword  ', level: 5, weapon: 'iron-sword' },
