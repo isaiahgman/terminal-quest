@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import terminalKit from 'terminal-kit';
 import {
   type GameState,
@@ -88,9 +89,12 @@ function spawnEnemies(world: World, player: Vec2, rng: Rng): LiveEnemy[] {
  * other by {@link placeBosses}, not scattered as a swarm.
  *
  * Bosses in `defeated` (restored from the save, TQ-022) are dropped AFTER
- * placement — placement consumes the RNG for the whole roster either way, so the
- * survivors keep the exact seeded positions a fresh run would give them, and a
- * defeated boss stays dead instead of respawning for a double-counted re-kill.
+ * placement — placement consumes the RNG for the whole roster either way, so
+ * the RNG stream stays aligned for everything placed later, and a defeated
+ * boss stays dead instead of respawning for a double-counted re-kill. (Boss
+ * positions themselves are per-launch, not cross-session: the placement pool
+ * is filtered around the player's CURRENT pos, which differs on a resume —
+ * consistent with the "resume the feel, not the frame" save doctrine.)
  */
 function spawnBosses(
   world: World,
@@ -122,6 +126,11 @@ let keyboard: KeyboardHandle | undefined;
 // until the first frame — a signal during startup has nothing to save yet.
 let latestState: GameState | undefined;
 let autosaveTimer: NodeJS.Timeout | undefined;
+// The most recent autosave failure, surfaced during shutdown: console.error
+// into the live alt-screen is garbled and overwritten by the next frame, so a
+// persistently failing autosave (read-only $HOME, full disk) would otherwise
+// be invisible until the final save also failed.
+let lastAutosaveError: unknown;
 function shutdown(code = 0): void {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -136,6 +145,12 @@ function shutdown(code = 0): void {
   term.hideCursor(false);
   term.fullscreen(false);
   term.styleReset();
+  // Now that the terminal is sane, surface any autosave failure that happened
+  // mid-game (it was unprintable while the renderer owned the screen).
+  if (lastAutosaveError !== undefined) {
+    console.error('terminal-quest: an autosave failed during play:');
+    console.error(lastAutosaveError);
+  }
   // Final synchronous save so the latest progress survives quit/SIGINT/crash.
   // After the terminal is restored, so a failed save can report cleanly; wrapped
   // so a save error can never block the exit.
@@ -210,8 +225,8 @@ async function main(): Promise<void> {
   const setupRng = new Rng(worldSeed);
   // The home base (TQ-013) anchors where a fresh run begins: you start at home.
   // Drawn from the seeded RNG before anything else so its tile — like the
-  // world — reproduces from the seed. (Persisting the base's grown state across
-  // sessions is the TQ-013 save slice, landing next.)
+  // world — reproduces from the seed. (Its grown state persists by derivation:
+  // tile from the seed, tier from the saved boss count — see the `base:` note.)
   const homePos = pickSpawn(world, setupRng);
   // The base's grown state derives from the persisted boss count (see the
   // `base:` note below) — computed here because the defeat-respawn path needs
@@ -238,9 +253,14 @@ async function main(): Promise<void> {
     // rebuilt world (out of bounds, or inside a wall) — which would soft-lock
     // the player with no escape. Keep the restored stats but relocate to a valid
     // spawn in that case; the validator can't catch this (it can't see the world).
+    // Relocate to the home tile, NOT a fresh pickSpawn draw: consuming an
+    // extra setupRng value here would silently shift every later placement
+    // (enemies, bosses, weapons, entrances) relative to every other session
+    // of this seed — the audit's RNG-stream-desync finding. homePos is always
+    // walkable and already computed.
     player = isWalkable(world, restored.pos.x, restored.pos.y)
       ? restored
-      : { ...restored, pos: pickSpawn(world, setupRng) };
+      : { ...restored, pos: { x: homePos.x, y: homePos.y } };
   } else {
     player = createPlayer(homePos);
   }
@@ -306,6 +326,8 @@ async function main(): Promise<void> {
   // flush retries.
   latestState = state;
   let lastSavedLevel = currentLevel(state);
+  let lastSavedBosses = state.bossesDefeated ?? 0;
+  let lastSavedWeapon = state.player.weapon;
   let saving = false;
   let pending = false;
   const flushSave = async (): Promise<void> => {
@@ -317,10 +339,17 @@ async function main(): Promise<void> {
     try {
       do {
         pending = false;
+        // Once shutdown starts, stand down: the final writeSaveSync owns the
+        // last word, and an async rename landing after it would roll the save
+        // back up to one autosave interval. (A rename already inside the OS
+        // when the signal hits is a one-syscall race this can't close.)
+        if (shuttingDown) return;
         if (latestState !== undefined) await writeSave(latestState);
       } while (pending);
     } catch (err: unknown) {
-      console.error('terminal-quest: autosave failed', err);
+      // Stash, don't print: the renderer owns the screen right now. Surfaced
+      // once by shutdown() after the terminal is restored.
+      lastAutosaveError = err;
     } finally {
       saving = false;
     }
@@ -336,11 +365,19 @@ async function main(): Promise<void> {
     rng: () => simRng.nextFloat(),
     render: (s) => {
       latestState = s;
-      // Save immediately on a level-up — the one "key event" that exists today
-      // (boss-kill / weapon-equip triggers arrive with TQ-011 / TQ-010).
+      // Save immediately on the key events (tdd §9): a level-up, a boss kill,
+      // or an equip — the moments a crash would hurt most. The interval save
+      // covers everything else.
       const level = currentLevel(s);
-      if (level > lastSavedLevel) {
+      const bosses = s.bossesDefeated ?? 0;
+      if (
+        level > lastSavedLevel ||
+        bosses > lastSavedBosses ||
+        s.player.weapon !== lastSavedWeapon
+      ) {
         lastSavedLevel = level;
+        lastSavedBosses = bosses;
+        lastSavedWeapon = s.player.weapon;
         requestSave();
       }
       renderer.render(s);
