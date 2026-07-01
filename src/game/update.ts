@@ -271,12 +271,17 @@ export function update(
   // attack outcomes, then handed back on the returned state as pure OUTPUT.
   let hitEvents: HitEvent[] = [];
 
-  // --- Pickups: walking onto a weapon equips it to the single slot (TQ-010). ---
-  // Done after the move (so the player must reach the tile) and before the attack
-  // (so the swing this tick already swings the new weapon). The last matching
-  // pickup wins if several stack on one tile — the slot holds exactly one — and
-  // every picked-up tile is cleared, so a pile is consumed in a single step.
-  if (pickups !== undefined) {
+  // --- Pickups: STEPPING onto a weapon equips it to the single slot (TQ-010). ---
+  // Gated on `moved`, like the dungeon transitions: equipping is a deliberate
+  // step onto the tile, never something that happens to a player *standing*
+  // there. (The audit found the standing case: surface from a dungeon onto an
+  // entrance that also holds a pickup, and one tick later — zero input — the
+  // pickup would replace the reward you just risked the run for.) Done after
+  // the move and before the attack (so the swing this tick already swings the
+  // new weapon). The last matching pickup wins if several stack on one tile —
+  // the slot holds exactly one — and every picked-up tile is cleared, so a
+  // pile is consumed in a single step.
+  if (pickups !== undefined && moved) {
     const here = pickups.filter(
       (p) => p.pos.x === player.pos.x && p.pos.y === player.pos.y,
     );

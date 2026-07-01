@@ -253,6 +253,11 @@ async function main(): Promise<void> {
   // Boss progress and run status restore with them, so a win streak — or a
   // finished run — survives a relaunch (prd §8).
   const defeated = new Set(save?.defeatedBosses ?? []);
+  // Dungeon entrances (TQ-014): stable seeded landmarks, placed relative to
+  // the fixed home tile (not the player's current pos), so the same seed puts
+  // the same doors in the same places on every launch — fresh or resumed.
+  // Drawn before the weapons so the weapon placer can keep loot off the doors.
+  const entrances = placeEntrances(world, homePos, setupRng, ENTRANCE_COUNT);
   const state: GameState = {
     world,
     player,
@@ -275,14 +280,12 @@ async function main(): Promise<void> {
     // A defeated run resumes *playing* (respawned at base, above); victory
     // stays sticky — a won game remains won on relaunch (TQ-022 decision #2).
     status: save?.status === 'defeat' ? undefined : save?.status,
-    // Weapon pickups scattered from the same seeded RNG (TQ-010). Not persisted
-    // by the save yet, so they reseed from the seed on resume — like the swarm.
-    pickups: placeWeapons(world, player.pos, setupRng, WEAPON_COUNT),
-    // Dungeon entrances (TQ-014): stable seeded landmarks, placed relative to
-    // the fixed home tile (not the player's current pos) and drawn LAST from
-    // the setup RNG, so the same seed puts the same doors in the same places
-    // on every launch — fresh or resumed.
-    entrances: placeEntrances(world, homePos, setupRng, ENTRANCE_COUNT),
+    // Weapon pickups scattered from the same seeded RNG (TQ-010), placed
+    // AFTER the entrances so no weapon can land under a door (a pickup on an
+    // entrance tile is unreachable — stepping onto the door descends first).
+    // Not persisted by the save, so they reseed from the seed on resume.
+    pickups: placeWeapons(world, player.pos, setupRng, WEAPON_COUNT, entrances),
+    entrances,
     tooTired: false,
     tick: save?.tick ?? 0,
   };

@@ -124,13 +124,22 @@ export function placeWeapons(
   player: Vec2,
   rng: Rng,
   count: number,
+  exclude: readonly Vec2[] = [],
 ): Pickup[] {
   if (count <= 0 || WEAPON_IDS.length === 0) return [];
+
+  // Tiles a weapon must never land on beyond the player's own: today the
+  // dungeon entrances (TQ-014) — a pickup under a door is unreachable, since
+  // stepping onto the door descends before the equip can happen.
+  const excluded = (t: Vec2): boolean =>
+    exclude.some((e) => e.x === t.x && e.y === t.y);
 
   const walkable: Vec2[] = [];
   for (let y = 0; y < world.height; y++) {
     for (let x = 0; x < world.width; x++) {
-      if (isWalkable(world, x, y)) walkable.push({ x, y });
+      if (isWalkable(world, x, y) && !excluded({ x, y })) {
+        walkable.push({ x, y });
+      }
     }
   }
   if (walkable.length === 0) return [];
