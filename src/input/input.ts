@@ -83,6 +83,15 @@ function isQuit(name: string): boolean {
 export class Input {
   private readonly held = new Map<Direction, number>();
   /**
+   * Directions PRESSED since the last drain, kept even if already released —
+   * the release tier deletes a direction from `held` the instant the key-up
+   * arrives, so a tap whose press and release both land inside one ~66 ms
+   * inter-drain window would otherwise leave no trace and move zero tiles
+   * (the audit's "the better tier drops taps" finding). resolveMove unions
+   * this with `held`; drain clears it, so every press moves at least once.
+   */
+  private readonly tapped = new Map<Direction, number>();
+  /**
    * Attack intents pressed since the last drain. Unlike movement, attacks are
    * one-shot — a press is a single swing, not a held state — so they queue here
    * and are emitted (and cleared) once. Mashing queues several; the stamina gate
@@ -108,14 +117,19 @@ export class Input {
 
   /** Apply a decoded key event (press, repeat, or release). */
   apply(event: KeyEvent): void {
+    // Single-character names normalize to lowercase so Shift/CapsLock WASD
+    // (and Q) still play — legacy terminals send the shifted byte as the name.
+    // Multi-character names (UP, CTRL_C, …) are already canonical.
+    const name =
+      event.name.length === 1 ? event.name.toLowerCase() : event.name;
     if (event.kind === 'release') {
-      this.onRelease(event.name);
+      this.onRelease(name);
     } else {
-      this.onPressOrRepeat(event.name);
+      this.onPressOrRepeat(name, event.kind === 'press');
     }
   }
 
-  private onPressOrRepeat(name: string): void {
+  private onPressOrRepeat(name: string, isPress: boolean): void {
     if (isQuit(name)) {
       this.quitRequested = true;
       return;
@@ -126,7 +140,13 @@ export class Input {
       // axis by comparing these stamps (last-pressed-wins), so a re-press of the
       // newer key is what flips a quick reversal — `set` updates the value in
       // place, no Map re-seating needed. The fresh stamp also resets expiry.
-      this.held.set(dir, this.now());
+      const stamp = this.now();
+      this.held.set(dir, stamp);
+      // Only a genuine PRESS earns the tap guarantee. A repeat must not — a
+      // held key streams repeats, and a repeat-refreshed tap would survive the
+      // key's release for one drain, re-introducing exactly the coast the
+      // release tier exists to kill.
+      if (isPress) this.tapped.set(dir, stamp);
       return;
     }
     const attackId = ATTACK_KEYS[name];
@@ -157,6 +177,7 @@ export class Input {
     if (move !== undefined) intents.push(move);
     intents.push(...this.attackIntents);
     this.attackIntents = [];
+    this.tapped.clear(); // every press has now produced its guaranteed move
     return intents;
   }
 
@@ -200,12 +221,25 @@ export class Input {
    * tests).
    */
   private resolveAxis(positive: Direction, negative: Direction): number {
-    const pos = this.held.get(positive);
-    const neg = this.held.get(negative);
+    const pos = this.stampFor(positive);
+    const neg = this.stampFor(negative);
     if (pos === undefined && neg === undefined) return 0;
     if (neg === undefined) return 1;
     if (pos === undefined) return -1;
     return pos >= neg ? 1 : -1;
+  }
+
+  /**
+   * A direction's freshest stamp across `held` and the tap-preserving
+   * `tapped` map — present in either counts, so a released-before-drain tap
+   * still resolves its axis exactly once.
+   */
+  private stampFor(dir: Direction): number | undefined {
+    const held = this.held.get(dir);
+    const tap = this.tapped.get(dir);
+    if (held === undefined) return tap;
+    if (tap === undefined) return held;
+    return Math.max(held, tap);
   }
 
   get shouldQuit(): boolean {

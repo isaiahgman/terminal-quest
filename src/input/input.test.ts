@@ -273,16 +273,39 @@ describe('Input — release tier (kitty protocol)', () => {
     expect(input.drain()).toEqual([]); // force-expired — no "moving forever"
   });
 
-  it('switches direction crisply: releasing up while pressing right yields only right', () => {
+  it('honours a same-window up-tap once, then switches crisply to right', () => {
     const { input, press, release, advance, useReleaseEvents } = makeInput();
     useReleaseEvents();
 
     press('UP');
-    press('RIGHT'); // both briefly held
-    release('UP'); // let go of up
+    press('RIGHT'); // both pressed inside the same inter-drain window
+    release('UP'); // …and up let go before the tick fires
     advance(SIM_DT);
 
-    // Only right survives — the up coast that plagued the timeout tier is gone.
+    // The up PRESS still registers exactly once (the tap guarantee — a press
+    // must never be swallowed), combined with the held right into a diagonal…
+    expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: -1 }]);
+    // …and from the next tick only right survives: no coast.
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: 0 }]);
+  });
+
+  it('switches crisply across drains: a release mid-hold never coasts', () => {
+    const { input, press, repeat, release, advance, useReleaseEvents } =
+      makeInput();
+    useReleaseEvents();
+
+    press('UP');
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: -1 }]);
+    repeat('UP'); // physically held across the tick — repeats stream
+    advance(SIM_DT);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: -1 }]);
+
+    release('UP');
+    press('RIGHT');
+    advance(SIM_DT);
+    // The repeat must NOT have re-armed the tap guarantee: up is gone at once.
     expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: 0 }]);
   });
 
@@ -324,5 +347,53 @@ describe('Input — quit', () => {
     press('ENTER');
     expect(input.drain()).toEqual([]);
     expect(input.shouldQuit).toBe(false);
+  });
+});
+
+describe('Input — tap fidelity in the release tier (audit fix)', () => {
+  it('a press+release inside one drain window still moves one tile', () => {
+    const { input, press, release, advance, useReleaseEvents } = makeInput();
+    useReleaseEvents();
+    press('d');
+    advance(20);
+    release('d'); // both inside a single ~66 ms inter-drain window
+    advance(20);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: 0 }]);
+    // Exactly once: the tap is consumed by the drain that honoured it.
+    expect(input.drain()).toEqual([]);
+  });
+
+  it('a tap still loses last-pressed-wins to a newer opposing hold', () => {
+    const { input, press, release, advance, useReleaseEvents } = makeInput();
+    useReleaseEvents();
+    press('d');
+    advance(5);
+    release('d');
+    advance(5);
+    press('a'); // newer — wins the axis even though the tap is preserved
+    expect(input.drain()).toEqual([{ type: 'move', dx: -1, dy: 0 }]);
+  });
+
+  it('does not double-move in the timeout tier (tap already held there)', () => {
+    const { input, press, advance } = makeInput();
+    press('d');
+    advance(20);
+    expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: 0 }]);
+    advance(20);
+    // Still inside HELD_WINDOW_MS: held state re-emits, exactly one intent.
+    expect(input.drain()).toEqual([{ type: 'move', dx: 1, dy: 0 }]);
+  });
+});
+
+describe('Input — shifted/CapsLock keys (audit fix)', () => {
+  it('uppercase WASD moves and uppercase Q quits', () => {
+    const { input, press, release, useReleaseEvents } = makeInput();
+    useReleaseEvents();
+    press('W');
+    expect(input.drain()).toEqual([{ type: 'move', dx: 0, dy: -1 }]);
+    release('W'); // uppercase release must clear the lowercase-held direction
+    expect(input.drain()).toEqual([]);
+    press('Q');
+    expect(input.shouldQuit).toBe(true);
   });
 });
