@@ -129,3 +129,16 @@ export function growBase(base: Base, bossesDefeated: number): Base {
 export function baseHpBonus(base: Base): number {
   return Math.max(0, base.tier - BASE_START_TIER) * HP_BONUS_PER_TIER;
 }
+
+/** Chebyshev radius of a fresh (tier-1) base's safe area — a 5×5 home. */
+export const BASE_RADIUS_START = 2;
+
+/**
+ * Chebyshev radius of the base's safe area at its current tier: the *visible*
+ * growth (prd §7 "a home that grows") — each tier extends the home by one ring.
+ * Never below the starting radius — a tier at or below the start is the 5×5
+ * fresh home (the same never-negative stance as {@link baseHpBonus}).
+ */
+export function baseRadius(base: Base): number {
+  return BASE_RADIUS_START + Math.max(0, base.tier - BASE_START_TIER);
+}

@@ -9,6 +9,8 @@ import type { EnemyAi } from './entities.js';
 import type { Progression } from './progression.js';
 import { createProgression } from './progression.js';
 import type { WeaponId } from '../data/weapons.js';
+import type { Base } from './base.js';
+import { baseRadius } from './base.js';
 
 export interface Vec2 {
   x: number;
@@ -91,6 +93,19 @@ export interface Pickup {
 }
 
 /**
+ * The player's home base placed in the world (TQ-013, prd §7/F9): the pure
+ * growth value (`base.ts`) anchored to a world tile. The square area within
+ * {@link baseRadius} of `pos` (Chebyshev — see {@link inBase}) is home ground:
+ * enemies never enter it, contact damage never lands inside it, and hp slowly
+ * recovers there — the safe, low-pressure breather the artifact asks for. Plain
+ * data so it serializes (TQ-012) and the renderer draws it data-driven.
+ */
+export interface HomeBase {
+  pos: Vec2;
+  growth: Base;
+}
+
+/**
  * A live enemy: pure `Enemy` stats/position paired with the per-enemy AI
  * bookkeeping the stepper carries between ticks (`entities.ts`). Two plain
  * objects so the whole thing stays serializable for save/load (TQ-012).
@@ -136,6 +151,13 @@ export interface GameState {
    * removes any pickup the player has stepped onto.
    */
   pickups?: readonly Pickup[];
+  /**
+   * The home base (TQ-013). Optional during incremental wiring — a state
+   * without one has no safe zone and no base buff. {@link update} settles its
+   * growth against `bossesDefeated` in the boss-cull step, keeps enemies out of
+   * its area, and regenerates hp inside it.
+   */
+  base?: HomeBase;
   /**
    * Set when the player tried to attack this tick but lacked the stamina — the
    * data behind the brief "too tired" cue. The HUD surfaces it (TQ-008); for now
@@ -193,4 +215,18 @@ export function tileAt(world: World, x: number, y: number): Tile {
 
 export function isWalkable(world: World, x: number, y: number): boolean {
   return tileAt(world, x, y) === 'floor';
+}
+
+/**
+ * Is (x, y) inside the base's safe area? Chebyshev distance (a square area, the
+ * same metric the charge radius uses) at the tier's {@link baseRadius}. The one
+ * containment rule every consumer shares — the enemy no-entry check and the
+ * contact-damage exemption in `update`, and the renderer's home-ground tint —
+ * so "inside the base" can never mean different things in different layers.
+ */
+export function inBase(base: HomeBase, x: number, y: number): boolean {
+  return (
+    Math.max(Math.abs(x - base.pos.x), Math.abs(y - base.pos.y)) <=
+    baseRadius(base.growth)
+  );
 }

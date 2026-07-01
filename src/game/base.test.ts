@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
+  BASE_RADIUS_START,
   BASE_START_TIER,
   BOSSES_PER_TIER,
   HP_BONUS_PER_TIER,
   baseHpBonus,
+  baseRadius,
   baseTierFor,
   createBase,
   growBase,
@@ -143,5 +145,21 @@ describe('baseHpBonus', () => {
   it('never goes negative for a degenerate sub-start tier', () => {
     const degenerate: Base = { tier: BASE_START_TIER - 5, bossesDefeated: 0 };
     expect(baseHpBonus(degenerate)).toBe(0);
+  });
+});
+
+describe('baseRadius', () => {
+  it('starts at the fresh radius and adds one ring per tier', () => {
+    expect(baseRadius(createBase())).toBe(BASE_RADIUS_START);
+    expect(baseRadius({ tier: 2, bossesDefeated: 2 })).toBe(
+      BASE_RADIUS_START + 1,
+    );
+    expect(baseRadius({ tier: 4, bossesDefeated: 6 })).toBe(
+      BASE_RADIUS_START + 3,
+    );
+  });
+
+  it('never shrinks below the fresh radius for a degenerate tier', () => {
+    expect(baseRadius({ tier: 0, bossesDefeated: 0 })).toBe(BASE_RADIUS_START);
   });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { tileAt, isWalkable } from './state.js';
-import type { Tile, World } from './state.js';
+import { inBase, tileAt, isWalkable } from './state.js';
+import type { HomeBase, Tile, World } from './state.js';
+import { BASE_RADIUS_START } from './base.js';
 
 function makeWorld(): World {
   // 2x2 fixture: top row floors, bottom row walls.
@@ -57,5 +58,33 @@ describe('isWalkable', () => {
     expect(isWalkable(world, 0, -1)).toBe(false); // y < 0
     expect(isWalkable(world, world.width, 0)).toBe(false); // x >= width
     expect(isWalkable(world, 0, world.height)).toBe(false); // y >= height
+  });
+});
+
+describe('inBase (TQ-013)', () => {
+  const home: HomeBase = {
+    pos: { x: 10, y: 10 },
+    growth: { tier: 1, bossesDefeated: 0 },
+  };
+
+  it('contains the center and the full Chebyshev square out to the radius', () => {
+    expect(inBase(home, 10, 10)).toBe(true);
+    // Corners of the square are exactly radius away in both axes — inside.
+    const r = BASE_RADIUS_START;
+    expect(inBase(home, 10 + r, 10 + r)).toBe(true);
+    expect(inBase(home, 10 - r, 10 - r)).toBe(true);
+  });
+
+  it('excludes the first ring past the radius', () => {
+    const r = BASE_RADIUS_START;
+    expect(inBase(home, 10 + r + 1, 10)).toBe(false);
+    expect(inBase(home, 10, 10 - r - 1)).toBe(false);
+  });
+
+  it('widens with the tier (the visible growth)', () => {
+    const grown: HomeBase = { ...home, growth: { tier: 2, bossesDefeated: 2 } };
+    const justOutsideFresh = 10 + BASE_RADIUS_START + 1;
+    expect(inBase(home, justOutsideFresh, 10)).toBe(false);
+    expect(inBase(grown, justOutsideFresh, 10)).toBe(true);
   });
 });

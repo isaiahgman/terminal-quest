@@ -258,6 +258,41 @@ describe('drawHud', () => {
   });
 });
 
+describe('drawHud — home base (TQ-013)', () => {
+  const WIDTH = 60;
+
+  it('shows the base tier when a base exists, and omits it otherwise', () => {
+    const withBase = new FakeScreen();
+    drawHud(
+      withBase,
+      makeState({
+        base: { pos: { x: 0, y: 0 }, growth: { tier: 3, bossesDefeated: 4 } },
+      }),
+      0,
+      WIDTH,
+    );
+    expect(rowText(withBase, 2, WIDTH)).toContain('Base T3');
+
+    const without = new FakeScreen();
+    drawHud(without, makeState(), 0, WIDTH);
+    expect(rowText(without, 2, WIDTH)).not.toContain('Base');
+  });
+
+  it("the hp ceiling includes the base's tier buff", () => {
+    const screen = new FakeScreen();
+    drawHud(
+      screen,
+      makeState({
+        base: { pos: { x: 0, y: 0 }, growth: { tier: 2, bossesDefeated: 2 } },
+      }),
+      0,
+      WIDTH,
+    );
+    // 18 hp against maxHp 20 + HP_BONUS_PER_TIER (10) = 30.
+    expect(rowText(screen, 0, WIDTH)).toContain('18/30');
+  });
+});
+
 describe('weaponLabel', () => {
   it('returns "Unarmed" for an empty slot', () => {
     expect(weaponLabel(makeState())).toBe('Unarmed');

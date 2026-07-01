@@ -430,4 +430,42 @@ describe('Renderer', () => {
     // The pickup is not the player glyph, and the player still draws last overall.
     expect(PICKUP_GLYPH.char).not.toBe(PLAYER_GLYPH.char);
   });
+
+  it('draws home ground in the base palette with the hearth at its center (TQ-013)', async () => {
+    const { Renderer } = await import('./renderer.js');
+    const { BASE_FLOOR_GLYPH, BASE_HEART_GLYPH, cellAttr } =
+      await import('./sprites.js');
+
+    // Base centered on the player's tile in the 3x3 plus world (radius 2 covers
+    // the whole viewport-visible world, so every floor tile is home ground).
+    const state: GameState = {
+      ...makeState(),
+      enemies: [],
+      base: {
+        pos: { x: 1, y: 1 },
+        growth: { tier: 1, bossesDefeated: 0 },
+      },
+    };
+    const renderer = new Renderer();
+    renderer.render(state);
+
+    const puts = recordedPuts(renderer);
+    // The open floor at (2,1) draws in the base-floor palette (world == screen
+    // here: the 3x3 world fits the viewport with no camera offset).
+    const floorPut = puts.find((f) => f.x === 2 && f.y === 1);
+    expect(floorPut?.char).toBe(BASE_FLOOR_GLYPH.char);
+    expect(floorPut?.color).toBe(BASE_FLOOR_GLYPH.color);
+
+    // The hearth draws over the base's center tile (under the player, who puts
+    // later); walls keep their identity (no base tint on (0,0)).
+    const heartAttr = cellAttr(BASE_HEART_GLYPH, true);
+    const atCenter = puts.filter((f) => f.x === 1 && f.y === 1);
+    expect(
+      atCenter.some(
+        (f) => f.char === BASE_HEART_GLYPH.char && f.color === heartAttr.color,
+      ),
+    ).toBe(true);
+    const wallPut = puts.find((f) => f.x === 0 && f.y === 0);
+    expect(wallPut?.char).not.toBe(BASE_FLOOR_GLYPH.char);
+  });
 });
