@@ -41,6 +41,7 @@ import {
 } from '../game/state.js';
 import { type Progression, createProgression } from '../game/progression.js';
 import { BOSS_ROSTER } from '../data/bosses.js';
+import { WEAPONS, type WeaponId } from '../data/weapons.js';
 
 /**
  * Save-format version. Bump when the shape changes incompatibly; {@link
@@ -67,6 +68,14 @@ export interface SaveData {
     readonly stamina: number;
     readonly def: number;
     readonly progress: Progression;
+    /**
+     * The equipped weapon's id (prd §8, TQ-021). Absent ⇒ unarmed — the same
+     * `undefined`-is-baseline convention the live slot uses (`state.ts`), so a
+     * pre-weapon save and an unarmed save read identically. Additive within
+     * schema v2 (no version bump): the tolerant loader treats a missing field
+     * as unarmed, exactly per the TQ-022 "siblings extend v2" plan.
+     */
+    readonly weapon?: WeaponId;
   };
   /**
    * `id`s (from `data/bosses.ts`) of the bosses defeated so far — identity, not
@@ -98,6 +107,9 @@ export function serialize(state: GameState): SaveData {
       stamina: state.player.stamina,
       def: state.player.def,
       progress: { ...progress },
+      // JSON.stringify drops an undefined field, so an unarmed player writes
+      // no `weapon` key at all — absent-is-unarmed, matching the live slot.
+      weapon: state.player.weapon,
     },
     defeatedBosses: [...(state.defeatedBossIds ?? [])],
     status: state.status ?? 'playing',
@@ -113,6 +125,7 @@ export function playerFromSave(save: SaveData): Player {
     stamina: save.player.stamina,
     def: save.player.def,
     progress: { ...save.player.progress },
+    weapon: save.player.weapon,
   };
 }
 
@@ -191,6 +204,15 @@ function isGameStatus(value: unknown): value is GameStatus {
 }
 
 /**
+ * Weapon slot: absent/`undefined` (unarmed) or an id the catalogue knows.
+ * Domain, not just type — an unknown id would crash the equip/HUD lookups the
+ * moment the slot is read (`WEAPONS[id]` has no runtime guard).
+ */
+function isWeaponSlot(value: unknown): value is WeaponId | undefined {
+  return value === undefined || (typeof value === 'string' && value in WEAPONS);
+}
+
+/**
  * Upgrade a save written by an older known version to the current shape, or
  * return the value unchanged. v1 → v2: the new fields default safely (no bosses
  * defeated, a playing run) — exactly the state every v1 save was actually in
@@ -233,7 +255,8 @@ function isSaveData(value: unknown): value is SaveData {
     !isNonNegativeNumber(player.hp) ||
     !isNonNegativeNumber(player.stamina) ||
     !isNonNegativeNumber(player.def) ||
-    !isProgression(player.progress)
+    !isProgression(player.progress) ||
+    !isWeaponSlot(player.weapon)
   ) {
     return false;
   }
