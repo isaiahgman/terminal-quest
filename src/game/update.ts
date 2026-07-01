@@ -279,10 +279,11 @@ export function update(
     });
 
     // --- Contact damage: adjacent enemies chip the player (floored at 0). ---
-    // NB: contactDamage is flat-per-tick (TQ-005 contract, entities.ts), unlike
-    // the dt-scaled movement/regen above — so its effective DPS scales with the
-    // tick rate. Fine while the tick rate is fixed; reconcile when death/HUD
-    // lands (TQ-008).
+    // contactDamage is flat-per-tick by design (TQ-023): unlike the dt-scaled
+    // movement/regen above, contact DPS is `atk × tickRate`, an accepted
+    // invariant while SIM_DT is fixed. A dt-scaled rate was rejected — it can't
+    // reproduce today's exact integer damage in IEEE-754. See contactDamage in
+    // entities.ts; revisit both if SIM_DT ever becomes tunable.
     let contact = 0;
     for (const { enemy } of enemies) {
       contact += contactDamage(enemy, player.pos);
