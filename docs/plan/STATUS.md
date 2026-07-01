@@ -5,7 +5,7 @@ Single source of truth for ticket state. **Do not edit by hand** — regenerate 
 `node scripts/status.mjs --write`. State is computed from merged/open PRs (matched to
 tickets by the `TQ-NNN` tag in each PR title), never stored manually.
 
-**17 merged · 0 in progress · 3 todo**
+**25 merged · 0 in progress · 0 todo**
 
 | TQ | Title | State | PRs |
 |----|-------|-------|-----|
@@ -19,13 +19,18 @@ tickets by the `TQ-NNN` tag in each PR title), never stored manually.
 | 007 | Named attack types (risk/reward) wired to input | merged | #35 |
 | 008 | HUD: health / stamina / level | merged | #66 |
 | 009 | Leveling + power curve (pure) | merged | #34 |
-| 010 | Weapons: slot, random drops, equip, damage | merged | #65 |
-| 011 | Bosses + win condition | merged | #67 |
+| 010 | Weapons: slot, random drops, equip, damage | merged | #65, #73 |
+| 011 | Bosses + win condition | merged | #67, #70 |
 | 012 | Save / autosave | merged | #63 |
-| 013 | Growing home base (persistent meta) | todo | — |
-| 014 | High-risk/high-reward dungeons | todo | — |
-| 015 | Juice: hit flashes, damage numbers, screen shake | todo | — |
+| 013 | Growing home base (persistent meta) | merged | #72, #94, #96 |
+| 014 | High-risk/high-reward dungeons | merged | #97, #99 |
+| 015 | Juice: hit flashes, damage numbers, screen shake | merged | #71, #91 |
 | 016 | Responsive held-direction movement (decouple from OS key-repeat) | merged | #32 |
 | 017 | Diagonal (8-direction) movement | merged | #64 |
 | 018 | Visual identity: palette, backgrounds, Unicode tileset | merged | #36 |
 | 019 | Real key-release via the kitty keyboard protocol (progressive enhancement) | merged | #37 |
+| 020 | Run end-states: defeat + victory (the loop's stakes) | merged | #86, #88 |
+| 021 | Weapon integration: pickups, equip, damage, HUD, save | merged | #93 |
+| 022 | Save schema v2: persist boss progress + run status | merged | #92, #100 |
+| 023 | Balance reconciliation: level-up power surge + tick-independent contact damage | merged | #87, #90 |
+| 024 | Author the full 10-boss roster | merged | #95 |

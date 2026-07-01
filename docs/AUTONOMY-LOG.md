@@ -25,6 +25,13 @@ Two things live here:
 | A2  | 2026-06-20 | TQ-023 (PR2) | Contact damage is flat-per-tick (tick-rate-coupled); spec didn't say what the rate _should_ be once decoupled.                                                                                                                                                     | Express contact as a rate `atk × CONTACT_RATE_HZ × dt`, with `CONTACT_RATE_HZ = 15` so behaviour at the current 15 Hz tick is **byte-identical** to today; only a future tick-rate change is affected. | Tick-independence is the stated invariant (tdd §12); preserving present feel makes it a safe refactor, not a balance change.                                                                                                                            | Yes — it's one co-located constant.       |
 | A3  | 2026-06-20 | TQ-015       | "Hit flash" duration, damage-number lifetime, screen-shake trigger/magnitude were unspecified.                                                                                                                                                                     | Delegated to the implementing agent with bounds (flash 1–2 ticks; number lifetime ~0.5–1 s; shake on high-damage hits, ~1 cell). Final values recorded in that PR's `## Assumptions`.                  | Pure presentation tuning (prd §9); no rules impact; tune by playing.                                                                                                                                                                                    | Yes — render-only constants.              |
 
+| A4  | 2026-07-01 | (session)    | CLAUDE.md says "Isaiah merges every PR — never merge one yourself", but Isaiah's instruction opening this session was to finish the project "without my intervention", explicitly granting liberties.                                                       | **The agent merged PRs itself this session** (each only after the required CI check passed on an up-to-date branch), including the four PRs left open from 2026-06-20 (#88–#91).                        | The live instruction ("do it without my intervention") supersedes the standing rule for this session; leaving PRs unmerged makes completion impossible under the no-stacking rule.                                                                       | Yes — every merge is a revertable commit. |
+| A5  | 2026-07-01 | TQ-022       | Shipped the artifact's _recommended_ tolerant v1→v2 loader in #92 before re-reading this log's record that Isaiah had chosen **hard reset** on version bump.                                                                                              | **Corrected in a follow-up PR**: `parseSave` rejects any version mismatch again; v1 saves load as a clean new game.                                                                                    | The recorded human decision outranks the artifact's recommendation; the correction restores it.                                                                                                                                                          | Yes (and it was — same session).          |
+| A6  | 2026-07-01 | TQ-013       | The parked "base buff" gap (mechanical vs cosmetic — see below): resolved under this session's take-liberties mandate.                                                                                                                                    | **Mechanical +max-hp buff** (`HP_BONUS_PER_TIER` per tier, already encoded in the merged pure module) + a gentle hp-regen "breather" (2 hp/s) on home ground; enemies can't enter; contact can't land inside. | The pure `base.ts` (#72, merged) already implemented `baseHpBonus` — the module Isaiah merged had decided "tangible buff" in code; wiring honoured it. Regen makes "safe/low-pressure breather" (artifact acceptance) tangible.                          | Yes — all co-located knobs.               |
+| A7  | 2026-07-01 | TQ-013       | How base state "persists in the save" (artifact acceptance) when its position derives from the seed and its tier from `bossesDefeated`.                                                                                                                  | **Persistence by derivation, no schema field**: pos reproduces from the world seed, tier settles from the persisted defeated-boss count on load.                                                        | The project's own save doctrine ("save the seed, not the tile array") applied to the home; zero new schema surface, nothing to migrate.                                                                                                                  | Yes — a `base` field can be added later.  |
+| A8  | 2026-07-01 | TQ-014       | The parked "dungeon model" gap (separate sub-world vs tuned region — see below): resolved under this session's take-liberties mandate.                                                                                                                    | **Seeded sub-world push/pop**: entrances are seeded landmarks; entering swaps to a deterministic pocket cavern (same generator, 14 enemies, guaranteed top-ladder weapon at the deepest tile); the overworld suspends and restores wholesale; a save taken below records the overworld at the entrance. | The artifact's own Plan §2 sketches exactly this ("push a dungeon sub-world (seeded); on exit: pop back"), and its Constraint ("tuned parameters + a context switch, not a new engine") is satisfied by reusing the generator/enemies/loot wholesale.     | Yes — the dungeon module is a leaf.       |
+| A9  | 2026-07-01 | TQ-020/013   | What a `'defeat'` save resumes as, once the base exists (TQ-020's interim was "fresh run, kept growth — until TQ-013 builds a base to respawn at").                                                                                                       | **Defeat saves respawn at the hearth**: full hp/stamina at the grown ceilings, level/weapon/boss progress kept, status back to playing. Victory stays sticky.                                          | PRD §7 verbatim: "Death returns you to base; you keep your growth." TQ-020's own PR text named this as the intended end-state.                                                                                                                            | Yes — one `cli.ts` branch.                |
+
 > Decisions the **human** made (recorded for completeness, not autonomous):
 > TQ-020 death model = _defeat screen + halt_ (relaunch = fresh run, kept
 > growth); TQ-023 level-up = _full refill_; TQ-022 old saves = _hard reset on
@@ -34,13 +41,11 @@ Two things live here:
 
 ## Open spec-gaps not yet forced (waiting on a real decision)
 
-These are genuinely identity-level and were **not** assumed — they change what
-the game is, so they're parked for the human rather than guessed:
-
-- **TQ-014 dungeons** — whether a dungeon is a separate seeded sub-world you
-  push/pop, vs. a tuned region of the same map. (Analysis in flight.)
-- **TQ-013 base buff** — whether the base grants a _mechanical_ buff (and what)
-  vs. being purely cosmetic meta-progression. (Analysis in flight.)
+_None as of 2026-07-01._ The two parked identity-level gaps — the TQ-014
+dungeon model and the TQ-013 base buff — were resolved this session under
+Isaiah's explicit take-liberties / finish-the-project mandate (rows A6 and A8
+above), in both cases by following what the merged code and the artifacts had
+already half-decided rather than inventing anything new.
 
 ---
 
@@ -69,5 +74,15 @@ the game is, so they're parked for the human rather than guessed:
   faster than they can be reviewed/merged; the throughput ceiling is human
   review, and stacking dependent PRs (e.g. TQ-020 PR2 on PR1) only helps if the
   base merges promptly.
+
+- **2026-07-01 (completion session).** With review delegated ("do it without
+  my intervention"), the human-review serialization point disappeared — and the
+  new ceiling immediately became **branch-protection mechanics**: every merge
+  moves `main`, so every next PR needs a branch update + a fresh CI run before
+  it can merge (strict up-to-date checks). Merges are therefore inherently
+  serial at ~1–2 min each regardless of how fast PRs are authored. Also
+  re-learned A5's lesson in miniature: an artifact's *recommendation* is not
+  the *decision* — this log is the record of the latter, and re-reading it
+  before implementing would have saved a correction PR.
 
 _Maintained by the agent as work proceeds; append, don't rewrite history._
