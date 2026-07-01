@@ -698,7 +698,13 @@ describe('update — player defeat (TQ-020)', () => {
       );
       return { enemy: { ...boss, hp: 0 }, ai: createEnemyAi() };
     });
-    const player: Player = { ...createPlayer({ x: 1, y: 2 }), hp: 3 };
+    // Progress high enough that the roster's XP crosses no threshold — a
+    // level-up would full-refill hp and dodge the death half of the race.
+    const player: Player = {
+      ...createPlayer({ x: 1, y: 2 }),
+      hp: 3,
+      progress: { level: 9, xp: 0, maxHp: 150, maxStamina: 60, atk: 47 },
+    };
     const state: GameState = {
       world,
       player,
@@ -708,6 +714,7 @@ describe('update — player defeat (TQ-020)', () => {
       tick: 0,
     };
     const next = update(state, [], TICK, noRng);
+    expect(next.player.progress!.level).toBe(9); // no level-up muddied the race
     expect(next.player.hp).toBe(0);
     expect(next.status).toBe('victory');
   });
