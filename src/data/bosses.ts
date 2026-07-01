@@ -70,10 +70,12 @@ export interface BossSpec {
 }
 
 /**
- * The boss roster — the single place reaching 10 is authored. Two are defined
- * now: one with an `enrage` signature, one a pure stat wall. Balance is a
- * play-tuning concern that needs the HUD (TQ-008) to read level/hp/boss-count,
- * so these are deliberate starting points, not final numbers (see the artifact).
+ * The boss roster — the single place reaching 10 is authored, and with TQ-024
+ * it is: ten bosses on an ascending difficulty ladder (hp/atk/def climb; the
+ * later walls are meant to read *impossible* until the grind makes them
+ * trivial — prd §2). Signatures alternate stat-walls and varied enrage tunings
+ * so the climb changes texture, not just magnitude. Balance numbers are
+ * deliberate starting points to tune by playing (the TQ-011 stance, kept).
  */
 const roster: BossSpec[] = [
   {
@@ -97,6 +99,94 @@ const roster: BossSpec[] = [
     glyph: 'Φ',
     color: 'brightRed',
     signature: { kind: 'none' },
+  },
+  {
+    id: 'carrion-shepherd',
+    name: 'The Carrion Shepherd',
+    hp: 300,
+    atk: 14,
+    def: 2,
+    speed: 4,
+    glyph: 'Ψ',
+    color: 'brightGreen',
+    signature: { kind: 'enrage', below: 0.5, speedMultiplier: 1.5 },
+  },
+  {
+    id: 'rust-colossus',
+    name: 'The Rust Colossus',
+    hp: 420,
+    atk: 16,
+    def: 4,
+    speed: 1.5,
+    glyph: 'Θ',
+    color: 'yellow',
+    signature: { kind: 'none' },
+  },
+  {
+    id: 'pale-huntress',
+    name: 'The Pale Huntress',
+    hp: 520,
+    atk: 18,
+    def: 3,
+    speed: 6,
+    glyph: 'λ',
+    color: 'brightWhite',
+    signature: { kind: 'enrage', below: 0.6, speedMultiplier: 1.8 },
+  },
+  {
+    id: 'grave-tide',
+    name: 'The Grave Tide',
+    hp: 650,
+    atk: 20,
+    def: 4,
+    speed: 3,
+    glyph: 'Ξ',
+    color: 'brightBlue',
+    signature: { kind: 'none' },
+  },
+  {
+    id: 'ember-tyrant',
+    name: 'The Ember Tyrant',
+    hp: 800,
+    atk: 23,
+    def: 5,
+    speed: 3,
+    glyph: 'Δ',
+    color: 'red',
+    signature: { kind: 'enrage', below: 0.35, speedMultiplier: 2.5 },
+  },
+  {
+    id: 'silent-choir',
+    name: 'The Silent Choir',
+    hp: 1000,
+    atk: 25,
+    def: 5,
+    speed: 4,
+    glyph: 'Π',
+    color: 'magenta',
+    signature: { kind: 'none' },
+  },
+  {
+    id: 'abyss-warden',
+    name: 'The Abyss Warden',
+    hp: 1200,
+    atk: 28,
+    def: 6,
+    speed: 4,
+    glyph: 'Σ',
+    color: 'brightCyan',
+    signature: { kind: 'enrage', below: 0.5, speedMultiplier: 2 },
+  },
+  {
+    id: 'shadow-monarch',
+    name: 'The Shadow Monarch',
+    hp: 1500,
+    atk: 32,
+    def: 7,
+    speed: 5,
+    glyph: '♛',
+    color: 'brightMagenta',
+    signature: { kind: 'enrage', below: 0.25, speedMultiplier: 3 },
   },
 ];
 
