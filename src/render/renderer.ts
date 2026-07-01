@@ -40,10 +40,12 @@ const FLASH_CHAR = '*';
  *
  * Sizing: the ScreenBuffer is sized once from the terminal at construction.
  * terminal-kit's ScreenBuffer has no resize, so mid-game terminal resize is
- * unsupported — the viewport keeps the original dimensions until restart. This
- * is safe (not garbled): `render` drives its loop off `this.screen.width/height`
- * and clamps enemies/player to that viewport, so it never draws past the buffer.
- * The buffer simply won't grow/shrink to track a resized terminal.
+ * unsupported — the viewport keeps the original dimensions until restart.
+ * GROWING the terminal is safe (the frame just stays its original size in the
+ * corner); SHRINKING it garbles — rows longer than the new width wrap at the
+ * terminal's right margin and smear until restart. `render` itself never
+ * draws past the buffer either way; the smear is the terminal re-wrapping
+ * oversized rows, not an out-of-bounds write.
  */
 export class Renderer {
   private readonly screen: terminalKit.ScreenBuffer;
@@ -64,6 +66,15 @@ export class Renderer {
    * regardless of how many sim ticks a frame batched.
    */
   private lastRenderMs: number | undefined;
+
+  /**
+   * The `World` drawn last frame. Effect positions are world cells, so when
+   * the world is swapped wholesale (dungeon enter/exit, TQ-014) every live
+   * effect's coordinates change meaning — a damage number from the surface
+   * would float over a random dungeon tile for its remaining lifetime. A
+   * reference change here flushes the pool.
+   */
+  private lastWorld: GameState['world'] | undefined;
 
   constructor(term: Term = terminalKit.terminal) {
     this.screen = new terminalKit.ScreenBuffer({
@@ -158,11 +169,24 @@ export class Renderer {
     // `hitEvents` is pure sim OUTPUT we never write back. The shake offset shifts
     // the whole world viewport (tiles + entities + fx) by a cell on a big hit.
     const now = performance.now();
+    if (state.world !== this.lastWorld) {
+      // World swapped (dungeon enter/exit): live effects are anchored in the
+      // OLD world's cells, so they'd draw as phantoms in the new one. Flush.
+      this.fx = createFx();
+      this.lastWorld = state.world;
+    }
     if (this.lastRenderMs !== undefined) {
       this.fx = advanceFx(this.fx, (now - this.lastRenderMs) / 1000);
     }
     this.lastRenderMs = now;
-    this.fx = spawnHitFx(this.fx, state.hitEvents ?? []);
+    if (state.status === 'victory' || state.status === 'defeat') {
+      // The loop freezes on a terminal status, so this is the LAST frame ever
+      // drawn: composite it clean rather than eternally mid-shake with a
+      // frozen flash and a damage number stuck mid-rise under the banner.
+      this.fx = createFx();
+    } else {
+      this.fx = spawnHitFx(this.fx, state.hitEvents ?? []);
+    }
     const shake = shakeOffset(this.fx);
 
     // One reusable put-options object for the viewport cell loop, so the hot
@@ -171,10 +195,20 @@ export class Renderer {
     // before each put — important because terminal-kit's object2attr mutates
     // this attr object in place (e.g. rewriting colour names to numeric
     // indices); reassigning fresh valid values each iteration keeps it sound.
+    // NB: terminal-kit's object2attr can also SET defaultColor/bgDefaultColor
+    // on this attr in place when a colour value doesn't resolve, and never
+    // clears them — so both flags are reassigned every cell below, or one bad
+    // value would force default colours for the rest of the frame.
     const cellOpts = {
       x: 0,
       y: 0,
-      attr: { color: '', bold: false, bgColor: '' },
+      attr: {
+        color: '',
+        bold: false,
+        bgColor: '',
+        defaultColor: false,
+        bgDefaultColor: false,
+      },
       wrap: false,
       dx: 1,
       dy: 0,
@@ -201,6 +235,8 @@ export class Renderer {
         cellOpts.y = sy;
         cellOpts.attr.color = g.color;
         cellOpts.attr.bgColor = g.bg ?? '';
+        cellOpts.attr.defaultColor = false;
+        cellOpts.attr.bgDefaultColor = false;
         this.screen.put(cellOpts, g.char);
       }
     }

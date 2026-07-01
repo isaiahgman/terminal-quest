@@ -47,6 +47,14 @@ class FakeScreenBuffer {
   draw(): void {}
 }
 
+// Deterministic clock for multi-render tests: the renderer ages its fx pool
+// by real performance.now() gaps, which would make two-render tests
+// wall-clock-dependent without this.
+let nowMs = 0;
+vi.mock('node:perf_hooks', () => ({
+  performance: { now: () => nowMs },
+}));
+
 vi.mock('terminal-kit', () => ({
   default: {
     // Tall enough that the world viewport survives the reserved HUD band
@@ -506,5 +514,61 @@ describe('Renderer', () => {
         (p) => p.x === 2 && p.y === 1 && p.char === EXIT_GLYPH.char,
       ),
     ).toBe(true);
+  });
+
+  it('flushes live fx when the world is swapped (dungeon transition)', async () => {
+    const { Renderer } = await import('./renderer.js');
+
+    const surface: GameState = {
+      ...makeState(),
+      enemies: [],
+      hitEvents: [{ pos: { x: 2, y: 1 }, amount: 5, big: false }],
+    };
+    const renderer = new Renderer();
+    nowMs = 0;
+    renderer.render(surface); // spawns a flash + damage number at (2,1)
+
+    // Swap to a different World object (as a dungeon transition does), one
+    // frame later — well inside the fx lifetimes.
+    const below: GameState = {
+      ...makeState(),
+      world: { ...surface.world }, // new reference = new world
+      enemies: [],
+      hitEvents: [],
+    };
+    recordedPuts(renderer).length = 0;
+    nowMs = 66;
+    renderer.render(below);
+
+    const puts = recordedPuts(renderer);
+    // No phantom '*' flash and no stray '5' from the old world's coordinates.
+    expect(puts.some((p) => p.char === '*')).toBe(false);
+    expect(puts.some((p) => p.char === '5')).toBe(false);
+  });
+
+  it('composites the final (terminal-status) frame clean — no frozen fx/shake', async () => {
+    const { Renderer } = await import('./renderer.js');
+
+    // A big hit on the SAME frame the run ends: without the quiesce, the last
+    // frame ever drawn would freeze mid-shake with a stuck flash under the
+    // banner.
+    const ending: GameState = {
+      ...makeState(),
+      enemies: [],
+      status: 'defeat',
+      hitEvents: [{ pos: { x: 2, y: 1 }, amount: 99, big: true }],
+    };
+    const renderer = new Renderer();
+    nowMs = 0;
+    renderer.render(ending);
+
+    const puts = recordedPuts(renderer);
+    expect(puts.some((p) => p.char === '*')).toBe(false);
+    // The banner still draws (YOU DIED is present).
+    const text = puts.map((p) => p.char).join('');
+    expect(text).toContain('YOU DIED'.replace(/ /g, ' '));
+    // Unshaken world: the wall at world (0,0) draws at screen (0,0).
+    const origin = puts.find((p) => p.x === 0 && p.y === 0);
+    expect(origin?.char).toBe('▓');
   });
 });
