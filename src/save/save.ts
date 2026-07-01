@@ -41,7 +41,8 @@ import {
   type Vec2,
 } from '../game/state.js';
 import { type Progression, createProgression } from '../game/progression.js';
-import { BOSS_ROSTER } from '../data/bosses.js';
+import { BOSS_ROSTER, TOTAL_BOSSES } from '../data/bosses.js';
+import { BOSSES_PER_TIER, HP_BONUS_PER_TIER } from '../game/base.js';
 import { WEAPONS, type WeaponId } from '../data/weapons.js';
 
 /**
@@ -70,10 +71,9 @@ export interface SaveData {
     readonly progress: Progression;
     /**
      * The equipped weapon's id (prd §8, TQ-021). Absent ⇒ unarmed — the same
-     * `undefined`-is-baseline convention the live slot uses (`state.ts`), so a
-     * pre-weapon save and an unarmed save read identically. Additive within
-     * schema v2 (no version bump): the tolerant loader treats a missing field
-     * as unarmed, exactly per the TQ-022 "siblings extend v2" plan.
+     * `undefined`-is-baseline convention the live slot uses (`state.ts`), so
+     * an unarmed save simply writes no key. Additive within schema v2 (no
+     * version bump), per the TQ-022 "siblings extend v2" plan.
      */
     readonly weapon?: WeaponId;
   };
@@ -223,10 +223,39 @@ function isWeaponSlot(value: unknown): value is WeaponId | undefined {
   return value === undefined || (typeof value === 'string' && value in WEAPONS);
 }
 
+/**
+ * Upper bound on world dimensions a save may claim. Live worlds are terminal
+ * size × 2 (a few hundred cells at most); the bound exists because
+ * `generateWorld` allocates width × height tiles, so a hand-edited
+ * `width: 1e9` would OOM at startup — and a crash *before* the loop starts
+ * leaves the poisonous save in place, crash-looping every launch.
+ */
+const MAX_WORLD_DIM = 2048;
+
+/**
+ * The largest hp ceiling the base can ever add: the buff at the tier a full
+ * roster clear earns. Used to bound a save's `hp` — anything above
+ * progression ceiling + this is unreachable in play, so it's a hand-edit.
+ */
+const MAX_BASE_HP_BONUS =
+  Math.floor(TOTAL_BOSSES / BOSSES_PER_TIER) * HP_BONUS_PER_TIER;
+
 function isSaveData(value: unknown): value is SaveData {
   if (!isRecord(value) || value.version !== SAVE_VERSION) return false;
 
   if (!isDefeatedBosses(value.defeatedBosses) || !isGameStatus(value.status)) {
+    return false;
+  }
+  // Cross-field coherence: a save claiming every boss defeated while still
+  // 'playing' would resume into a PERMANENTLY unwinnable world — the victory
+  // flip lives in the boss-cull step, and there is no boss left to cull. No
+  // legitimate write can produce it (the same tick that fells the last boss
+  // sets 'victory'), so it is a hand-edit; degrade to a clean new game.
+  if (
+    value.status === 'playing' &&
+    TOTAL_BOSSES > 0 &&
+    (value.defeatedBosses as readonly string[]).length >= TOTAL_BOSSES
+  ) {
     return false;
   }
 
@@ -235,7 +264,9 @@ function isSaveData(value: unknown): value is SaveData {
     !isRecord(world) ||
     !isInteger(world.seed) ||
     !isPositiveInteger(world.width) ||
-    !isPositiveInteger(world.height)
+    !isPositiveInteger(world.height) ||
+    world.width > MAX_WORLD_DIM ||
+    world.height > MAX_WORLD_DIM
   ) {
     return false;
   }
@@ -249,6 +280,17 @@ function isSaveData(value: unknown): value is SaveData {
     !isNonNegativeNumber(player.def) ||
     !isProgression(player.progress) ||
     !isWeaponSlot(player.weapon)
+  ) {
+    return false;
+  }
+  // Domain, not just type, on the *upper* side too: current values above
+  // their ceilings are unreachable in play (regen/refill only ever fill *to*
+  // a ceiling) and the sim never clamps them down — a hand-edited
+  // `hp: 1e300` would be permanent god-mode through the front door.
+  const progress = player.progress as Progression;
+  if (
+    player.hp > progress.maxHp + MAX_BASE_HP_BONUS ||
+    player.stamina > progress.maxStamina
   ) {
     return false;
   }
@@ -288,7 +330,10 @@ let writeCounter = 0;
 
 function tempPath(file: string): string {
   writeCounter += 1;
-  return `${file}.${writeCounter}.tmp`;
+  // The pid keeps two game instances (unsupported, but cheap to survive) from
+  // clobbering each other's in-flight temp file; the counter keeps this
+  // process's own concurrent writers apart.
+  return `${file}.${process.pid}.${writeCounter}.tmp`;
 }
 
 /** The exact bytes written to disk. One definition so the format can't drift. */
@@ -304,8 +349,14 @@ export function readSave(): SaveData | null {
   let text: string;
   try {
     text = readFileSync(saveFilePath(), 'utf8');
-  } catch {
-    return null; // missing or unreadable → new game
+  } catch (err: unknown) {
+    // ONLY a missing file means "new game". Any other failure (EACCES, EIO —
+    // a *transiently* unreadable save) must throw: returning null here would
+    // start a fresh run whose first autosave, seconds later, permanently
+    // overwrites the player's real progress. Version mismatch is a recorded
+    // hard-reset decision; destruction over a transient I/O error is not.
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw err;
   }
   return parseSave(text);
 }
