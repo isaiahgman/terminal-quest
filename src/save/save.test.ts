@@ -73,6 +73,21 @@ describe('serialize', () => {
     expect(save.status).toBe('victory');
   });
 
+  it('captures the equipped weapon; unarmed writes no weapon key (TQ-021)', () => {
+    const state = makeState();
+    const armed = serialize({
+      ...state,
+      player: { ...state.player, weapon: 'iron-sword' },
+    });
+    expect(armed.player.weapon).toBe('iron-sword');
+    // Unarmed is the ABSENT key, not an explicit null/undefined value — so the
+    // JSON on disk is identical to a pre-weapon save.
+    const unarmed = JSON.parse(JSON.stringify(serialize(state))) as {
+      player: Record<string, unknown>;
+    };
+    expect('weapon' in unarmed.player).toBe(false);
+  });
+
   it('copies defeatedBossIds (no aliasing of the live state array)', () => {
     const defeatedBossIds = ['gatekeeper'];
     const save = serialize({ ...makeState(), defeatedBossIds });
@@ -115,6 +130,17 @@ describe('round trip', () => {
       def: 2,
       progress: createProgression(),
     });
+  });
+
+  it('playerFromSave restores the equipped weapon (TQ-021)', () => {
+    const state = makeState();
+    const save = serialize({
+      ...state,
+      player: { ...state.player, weapon: 'warhammer' },
+    });
+    expect(playerFromSave(save).weapon).toBe('warhammer');
+    // And the unarmed baseline stays unarmed.
+    expect(playerFromSave(serialize(state)).weapon).toBeUndefined();
   });
 
   it('playerFromSave deep-copies pos and progress (no aliasing)', () => {
@@ -161,6 +187,16 @@ describe('parseSave rejects corrupt input (→ new game)', () => {
     expect(
       parseSave(JSON.stringify({ ...valid, defeatedBosses: [42] })),
     ).toBeNull();
+  });
+
+  it('returns null for a weapon id the catalogue does not know (TQ-021)', () => {
+    for (const weapon of ['excalibur', 42, null]) {
+      const bad = JSON.stringify({
+        ...valid,
+        player: { ...valid.player, weapon },
+      });
+      expect(parseSave(bad)).toBeNull();
+    }
   });
 
   it('returns null for a status outside the GameStatus union', () => {
