@@ -74,18 +74,22 @@ function probeKittySupport(io: KeyboardIo): Promise<ProbeResult> {
       resolve({ supported, leftover });
     };
 
+    /** Everything in `text` except the reply match — keystrokes typed BEFORE
+     *  the terminal composed its answer matter as much as ones after (the old
+     *  slice(after) dropped them, re-swallowing the first keystroke). Any
+     *  trailing DA reply left in is harmless: the decoder ignores `CSI … c`. */
+    const around = (text: string, match: RegExpExecArray): string =>
+      text.slice(0, match.index) + text.slice(match.index + match[0].length);
+
     const onData = (chunk: Buffer): void => {
       buffer += chunk.toString('latin1');
-      // Bytes after the reply are real keystrokes (typed during the probe) —
-      // hand them back so the first keystroke isn't swallowed. Any trailing DA
-      // reply in there is harmless: the decoder ignores `CSI … c`.
       const kitty = KITTY_REPLY.exec(buffer);
       if (kitty) {
-        finish(true, buffer.slice(kitty.index + kitty[0].length));
+        finish(true, around(buffer, kitty));
         return;
       }
       const da = DA_REPLY.exec(buffer);
-      if (da) finish(false, buffer.slice(da.index + da[0].length));
+      if (da) finish(false, around(buffer, da));
     };
 
     // No response at all (legacy terminal) → unsupported; surface whatever was
@@ -129,6 +133,16 @@ export async function startKeyboard(
     setRawMode(io.stdin, false);
     io.stdin.pause();
   };
+
+  // Belt-and-braces for the window between the ENABLE write below and the
+  // caller receiving (and storing) the handle: a signal in that gap runs the
+  // process exit path with no reachable restore(), which would leave the
+  // kitty entry pushed on the shell. The exit hook pops it; restore() runs
+  // first on every normal path and flips `restored`, making this a no-op.
+  const exitSafety = (): void => {
+    if (!restored && protocolEnabled) io.stdout.write(DISABLE);
+  };
+  process.once('exit', exitSafety);
 
   // Everything from the ENABLE write onward must undo itself if it throws: once
   // the protocol is pushed, a failure here would reject *before* the handle
