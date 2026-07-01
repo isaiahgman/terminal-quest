@@ -114,6 +114,30 @@ describe('serialize', () => {
   });
 });
 
+describe('serialize — inside a dungeon (TQ-014)', () => {
+  it('records the suspended overworld with the player at the entrance', () => {
+    const state = makeState();
+    const inDungeon: GameState = {
+      ...state,
+      // A stand-in dungeon world with different dims/seed than the overworld.
+      world: { width: 9, height: 9, tiles: [['floor']], seed: 777 },
+      player: { ...state.player, pos: { x: 2, y: 2 } },
+      dungeon: {
+        returnPos: { x: 30, y: 12 },
+        exitPos: { x: 2, y: 2 },
+        overworld: { world },
+      },
+    };
+    const save = serialize(inDungeon);
+    // The OVERWORLD's seed/dims, not the dungeon's…
+    expect(save.world).toEqual({ seed: 1234, width: 40, height: 25 });
+    // …with the player at the door they went down through.
+    expect(save.player.pos).toEqual({ x: 30, y: 12 });
+    // Player-bound state persists exactly as held mid-dungeon.
+    expect(save.player.hp).toBe(12);
+  });
+});
+
 describe('round trip', () => {
   it('serialize → JSON → parseSave reproduces the save', () => {
     const save = serialize(makeState());
